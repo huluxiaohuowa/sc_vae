@@ -1,3 +1,6 @@
 [submodule "mol_spec"]
 	path = mol_spec
 	url = ssh://git@ddl.bjmu.edu.cn:15806/ybli/mol_spec.git
+[submodule "data-center.git"]
+	path = data-center
+	url = ssh://git@ddl.bjmu.edu.cn:15806/scaffold-network/data-center.git
