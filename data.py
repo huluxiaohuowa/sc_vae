@@ -9,4 +9,4 @@ from mol_spec import *
 __all__ = [
 ]
 
-ms = MoleculeSpec()
+from mol_spec import MoleculeSpec
