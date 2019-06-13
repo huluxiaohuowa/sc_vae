@@ -109,3 +109,5 @@ datasets
 
 # datasets
 *.smi
+*.json
+
