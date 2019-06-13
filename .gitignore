@@ -109,5 +109,3 @@ datasets
 
 # datasets
 *.smi
-*.json
-data-center
