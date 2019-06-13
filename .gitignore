@@ -110,4 +110,5 @@ datasets
 # datasets
 *.smi
 *.json
-
+data-center
+mol_spec
