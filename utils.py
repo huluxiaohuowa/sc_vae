@@ -12,6 +12,8 @@ __all__ = [
     'smiles_to_dgl_graph',
     'ms',
     'graph_from_line',
+    'get_num_lines',
+    'str_from_line',
 ]
 
 ms = MoleculeSpec.get_default()
