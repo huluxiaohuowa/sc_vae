@@ -2,7 +2,6 @@ import os.path as op
 from multiprocessing import cpu_count
 import random
 
-import torch
 from joblib import Parallel
 import dgl
 
@@ -84,7 +83,3 @@ class Dataloader(object):
             )
 
             yield dgl.batch(ls_o_scaffold), dgl.batch(ls_c_scaffold)
-
-
-
-
