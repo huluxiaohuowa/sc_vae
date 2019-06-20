@@ -45,6 +45,22 @@ class BNReLULinear(nn.Module):
         return self.bn_relu_linear(x)
 
 
+class WeaveLayer(nn.Module):
+    def __init(
+        self,
+        num_v_in_feat: int,
+        num_v_out_feat: int,
+        num_e_in_feat: int,
+        num_e_out_feat: int,
+    ):
+        super().__init__()
+        self.num_v_in_feat = num_v_in_feat
+        self.num_v_out_feat = num_v_out_feat
+        self.num_e_in_feat = num_e_in_feat
+        self.num_e_out_feat = num_e_out_feat
+
+
+
 class GraphConv(nn.Module):
     def __init__(
         self,

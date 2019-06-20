@@ -128,3 +128,28 @@ def graph_from_line(
     return g
 
 
+def get_whole_data(
+    g: dgl.graph.DGLGraph,
+    key_n: str='feat',
+    key_e: str='feat'
+):
+    num_n_feat, num_e_feat = g.ndata[key_n].size(-1), g.edata[key_e].size(-1)
+    # num_feat = num_n_feat + num_e_feat
+    num_n, num_e = g.ndata[key_n].size(0), g.edata[key_e].size(0)
+    # batch_size = num_n + num_e
+    ndata_new = torch.cat(
+        (g.ndata[key_n], torch.zeros(num_n, num_e_feat)),
+        dim=1
+    )
+    edata_new = torch.cat(
+        (torch.zeros(num_e, num_n_feat), g.edata[key_e]),
+        dim=1
+    )
+    all_node_data = torch.cat(
+        (ndata_new, edata_new),
+        dim=0
+    )
+
+    return all_node_data
+
+
