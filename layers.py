@@ -12,10 +12,12 @@ class BNReLULinear(nn.Module):
     Linear layer with bn->relu->linear architecture
     """
 
-    def __init__(self,
-                 in_features: int,
-                 out_features: int,
-                 activation: str = 'elu'):
+    def __init__(
+        self,
+        in_features: int,
+        out_features: int,
+        activation: str = 'elu'
+    ):
         """
 
         Args:
@@ -48,17 +50,46 @@ class BNReLULinear(nn.Module):
 class WeaveLayer(nn.Module):
     def __init(
         self,
-        num_v_in_feat: int,
-        num_v_out_feat: int,
-        num_e_in_feat: int,
-        num_e_out_feat: int,
+        # num_v_in_feat: int,
+        # num_v_out_feat: int,
+        # num_e_in_feat: int,
+        # num_e_out_feat: int,
+        num_in_feat: int,
+        num_out_feat: int,
+        activation: str='relu',
     ):
         super().__init__()
-        self.num_v_in_feat = num_v_in_feat
-        self.num_v_out_feat = num_v_out_feat
-        self.num_e_in_feat = num_e_in_feat
-        self.num_e_out_feat = num_e_out_feat
+        # self.num_v_in_feat = num_v_in_feat
+        # self.num_v_out_feat = num_v_out_feat
+        # self.num_e_in_feat = num_e_in_feat
+        # self.num_e_out_feat = num_e_out_feat
+        self.num_in_feat = num_in_feat
+        self.num_out_feat = num_out_feat
+        self.activation = activation
+        if self.activation is not None:
+            self.linear = BNReLULinear(
+                self.in_features,
+                self.out_features,
+                self.activation
+            )
+        else:
+            self.linear = nn.Linear(
+                self.in_features,
+                self.out_features * self.num_bond_types,
+                self.activation
+            )
 
+    def forward(
+        self,
+        n_feat: torch.Tensor,
+        adj: torch.Tensor
+    ):
+        assert adj.is_sparse
+        n_feat = self.linear(n_feat)
+        n_feat_self = n_feat * n_feat
+        n_feat_adj = torch.mm(adj, n_feat)
+
+        return n_feat_self + n_feat_adj
 
 
 class GraphConv(nn.Module):
