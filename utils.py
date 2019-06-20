@@ -135,21 +135,42 @@ def get_whole_data(
 ):
     num_n_feat, num_e_feat = g.ndata[key_n].size(-1), g.edata[key_e].size(-1)
     # num_feat = num_n_feat + num_e_feat
-    num_n, num_e = g.ndata[key_n].size(0), g.edata[key_e].size(0)
-    # batch_size = num_n + num_e
+    num_n, num_e = g.ndata[key_n].size(0), int(g.edata[key_e].size(0) / 2)
+    batch_size = num_n + num_e
     ndata_new = torch.cat(
         (g.ndata[key_n], torch.zeros(num_n, num_e_feat)),
         dim=1
     )
     edata_new = torch.cat(
-        (torch.zeros(num_e, num_n_feat), g.edata[key_e]),
+        (torch.zeros([num_e, num_n_feat]), g.edata[key_e][: num_e]),
         dim=1
     )
     all_node_data = torch.cat(
         (ndata_new, edata_new),
         dim=0
     )
+    n_new = torch.arange(num_n, batch_size)
+    indices = torch.cat(
+        [n_new for _ in range(2)],
+        dim=-1
+    )
+    indices1 = torch.stack(
+        [indices, g.edges()[0]],
+        dim=0
+    )
+    indices2 = torch.stack(
+        [g.edges()[0], indices],
+        dim=0
+    )
+    indices = torch.cat([indices1, indices2], dim=-1)
+    n_e_adj = torch.sparse_coo_tensor(
+        indices,
+        [1. for _ in range(indices.size(-1))],
+        torch.Size([batch_size, batch_size])
+    )
+    adj = (
+        torch.eye(batch_size).to_sparse() +
+        n_e_adj
+    )
 
-    return all_node_data
-
-
+    return all_node_data, adj
