@@ -7,6 +7,7 @@ from rdkit.Chem import AllChem
 import torch
 
 from mol_spec import *
+from ops import *
 
 __all__ = [
     'smiles_to_dgl_graph',
@@ -14,6 +15,7 @@ __all__ = [
     'graph_from_line',
     'get_num_lines',
     'str_from_line',
+    'graph_to_whole_graph',   
 ]
 
 ms = MoleculeSpec.get_default()
@@ -128,49 +130,170 @@ def graph_from_line(
     return g
 
 
-def get_whole_data(
-    g: dgl.graph.DGLGraph,
-    key_n: str='feat',
-    key_e: str='feat'
-):
-    num_n_feat, num_e_feat = g.ndata[key_n].size(-1), g.edata[key_e].size(-1)
-    # num_feat = num_n_feat + num_e_feat
-    num_n, num_e = g.ndata[key_n].size(0), int(g.edata[key_e].size(0) / 2)
-    batch_size = num_n + num_e
+def get_remote_connection(
+    adj: torch.Tensor,
+) -> t.Tuple[torch.Tensor, ...]:
+    d = spmmsp(adj.coalesce(), adj.coalesce())
+    d_indices_2 = d.to_dense().nonzero().t()
+    d_indices_2 = d_indices_2[:, d_indices_2[0, :] != d_indices_2[1, :]]
+    
+    d = spmmsp(d.coalesce(), adj.coalesce())
+    d = d - d.mul(adj)
+    d_indices_3 = d.to_dense().nonzero().t()
+    d_indices_3 = d_indices_3[:, d_indices_3[0, :] != d_indices_3[1, :]]
+    return d_indices_2, d_indices_3
+
+
+def graph_to_whole_graph(
+    adj: torch.Tensor,
+    bond_info: torch.Tensor,
+    n_feat: torch.Tensor,
+    e_feat: torch.Tensor
+) -> t.Tuple[torch.Tensor, ...]:
+    """Involving remote connections and consider edges as nodes 
+    
+    Args:
+        adj (torch.Tensor): 
+            adj with out self connections N x N
+        bond_info (torch.Tensor): 
+            original bond info 2 x N_e
+        n_feat (torch.Tensor): 
+            original node feat N x F
+        e_feat (torch.Tensor): 
+            original edge feat N_e x F_e
+    """
+    # adj = g.adjacency_matrix()
+    # bond_info = torch.stack(g.edges(), dim=0)
+    # n_feat = g.ndata['feat']
+    # e_feat = g.edata['feat']
+
+    num_n_feat, num_e_feat = n_feat.size(-1), e_feat.size(-1)
+    d_indices_2, d_indices_3 = get_remote_connection(adj)
+    all_bond_info = torch.cat([bond_info, d_indices_2, d_indices_3], dim=-1)
+    all_e_feat = torch.cat(
+        [
+            torch.cat(
+                [
+                    e_feat, 
+                    torch.zeros([e_feat.size(0), 2])
+                ], 
+                dim=-1
+            ),
+            torch.cat(
+                [
+                    torch.zeros([d_indices_2.size(-1), e_feat.size(-1)]),
+                    torch.ones([d_indices_2.size(-1), 1]),
+                    torch.zeros([d_indices_2.size(-1), 1])
+                ], 
+                dim=-1
+            ),
+            torch.cat(
+                [
+                    torch.zeros([d_indices_3.size(-1), e_feat.size(-1)]),
+                    torch.zeros([d_indices_3.size(-1), 1]),
+                    torch.ones([d_indices_3.size(-1), 1])
+                ], 
+                dim=-1
+            )
+        ],
+        dim=0
+    )
+    num_n = n_feat.size(0)
+    num_e = all_e_feat.size(0)
     ndata_new = torch.cat(
-        (g.ndata[key_n], torch.zeros(num_n, num_e_feat)),
+        (n_feat, torch.zeros(num_n, all_e_feat.size(1))),
         dim=1
     )
     edata_new = torch.cat(
-        (torch.zeros([num_e, num_n_feat]), g.edata[key_e][: num_e]),
+        (torch.zeros([all_e_feat.size(0), num_n_feat]), all_e_feat),
         dim=1
     )
     all_node_data = torch.cat(
         (ndata_new, edata_new),
         dim=0
     )
-    n_new = torch.arange(num_n, batch_size)
-    indices = torch.cat(
-        [n_new for _ in range(2)],
+    n_new = torch.arange(
+        num_n, 
+        all_node_data.size(0)
+    )
+    all_new_bond_info = torch.cat(
+        [
+            torch.stack(
+                [all_bond_info[0], n_new],
+                dim=0
+            ),
+            torch.stack(
+                [n_new, all_bond_info[0]],
+                dim=0
+            ),
+            torch.stack(
+                [all_bond_info[1], n_new],
+                dim=0
+            ),
+            torch.stack(
+                [n_new, all_bond_info[1]],
+                dim=0
+            )
+        ],
         dim=-1
     )
-    indices1 = torch.stack(
-        [indices, g.edges()[0]],
-        dim=0
-    )
-    indices2 = torch.stack(
-        [g.edges()[0], indices],
-        dim=0
-    )
-    indices = torch.cat([indices1, indices2], dim=-1)
-    n_e_adj = torch.sparse_coo_tensor(
-        indices,
-        [1. for _ in range(indices.size(-1))],
-        torch.Size([batch_size, batch_size])
-    )
     adj = (
-        torch.eye(batch_size).to_sparse() +
-        n_e_adj
+        torch.eye(all_node_data.size(0)).to_sparse() +
+        torch.sparse_coo_tensor(
+            all_new_bond_info,
+            [1. for _ in range(all_new_bond_info.size(-1))],
+            torch.Size(
+                [all_node_data.size(0), all_node_data.size(0)]
+            )
+        )
     )
+    return all_node_data, all_new_bond_info, adj
 
-    return all_node_data, adj
+
+# def get_whole_data(
+#     g: dgl.graph.DGLGraph,
+#     key_n: str='feat',
+#     key_e: str='feat'
+# ):
+#     num_n_feat, num_e_feat = g.ndata[key_n].size(-1), g.edata[key_e].size(-1)
+#     # num_feat = num_n_feat + num_e_feat
+#     num_n, num_e = g.ndata[key_n].size(0), int(g.edata[key_e].size(0) / 2)
+#     batch_size = num_n + num_e
+#     ndata_new = torch.cat(
+#         (g.ndata[key_n], torch.zeros(num_n, num_e_feat)),
+#         dim=1
+#     )
+#     edata_new = torch.cat(
+#         (torch.zeros([num_e, num_n_feat]), g.edata[key_e][: num_e]),
+#         dim=1
+#     )
+#     all_node_data = torch.cat(
+#         (ndata_new, edata_new),
+#         dim=0
+#     )
+
+#     n_new = torch.arange(num_n, batch_size)
+#     indices = torch.cat(
+#         [n_new for _ in range(2)],
+#         dim=-1
+#     )
+#     indices1 = torch.stack(
+#         [indices, g.edges()[0]],
+#         dim=0
+#     )
+#     indices2 = torch.stack(
+#         [g.edges()[0], indices],
+#         dim=0
+#     )
+#     indices = torch.cat([indices1, indices2], dim=-1)
+#     n_e_adj = torch.sparse_coo_tensor(
+#         indices,
+#         [1. for _ in range(indices.size(-1))],
+#         torch.Size([batch_size, batch_size])
+#     )
+#     adj = (
+#         torch.eye(batch_size).to_sparse() +
+#         n_e_adj
+#     )
+
+#     return all_node_data, adj
