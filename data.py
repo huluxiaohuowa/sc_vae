@@ -2,7 +2,7 @@ import os.path as op
 from multiprocessing import cpu_count
 import random
 
-from joblib import Parallel
+from joblib import Parallel, delayed
 import dgl
 
 from utils import *
@@ -23,7 +23,7 @@ class Dataloader(object):
         c_scaffolds_file: str=op.join(
             op.dirname(__file__),
             'data-center',
-            'c_scaffolds_file'
+            'c_scaffolds.smi'
         ),
         batch_size: int=400,
         collate_fn: str='dgl',
@@ -54,14 +54,14 @@ class Dataloader(object):
             get_num_lines(self.o_scaffolds) == 
             get_num_lines(self.c_scaffolds)
         )
-        return self.num_lines
+        return self.num_id_block
 
-    def __iter__():
+    def __iter__(self):
         for block in self.id_block:
             ls_o_scaffold = Parallel(
                 n_jobs=self.num_workers, 
-                backend='multiprocessing')
-            (
+                backend='multiprocessing'
+            )(
                 delayed(graph_from_line)
                 (
                     self.o_scaffolds,
@@ -69,10 +69,11 @@ class Dataloader(object):
                 )
                 for i in block
             )
+
             ls_c_scaffold = Parallel(
                 n_jobs=self.num_workers, 
-                backend='multiprocessing')
-            (
+                backend='multiprocessing'
+            )(
                 delayed(graph_from_line)
                 (
                     self.c_scaffolds,
@@ -83,3 +84,4 @@ class Dataloader(object):
             )
 
             yield dgl.batch(ls_o_scaffold), dgl.batch(ls_c_scaffold)
+            # yield block

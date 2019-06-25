@@ -10,6 +10,7 @@ import ops
 
 __all__ = [
     "WeaveLayer",
+    "DenseNet",
     "AvgPooling",
     "SumPooling"
 ]
@@ -175,8 +176,8 @@ class DenseLayer(nn.Module):
     def __init__(
         self,
         num_in_feat: int,
-        num_out_feat: int,
         num_botnec_feat: int,
+        num_out_feat: int,
         activation: str = 'elu',
     ):
         self.num_in_feat = num_in_feat
@@ -213,15 +214,17 @@ class DenseNet(nn.Module):
     def __init__(
         self,
         num_feat: int,
-        num_k_feat: int,
-        num_botnec_feat: int,
         causal_hidden_sizes: t.Iterable,
+        num_botnec_feat: int,
+        num_k_feat: int,
         num_dense_layers: int,
+        num_out_feat: int,
         activation: str='elu'
     ):
         self.num_feat = num_feat
         self.num_dense_layers = num_dense_layers
         self.causal_hidden_sizes = list(causal_hidden_sizes)
+        self.num_out_feat = num_out_feat
         self.casual = CasualWeave(
             self.num_feat,
             self.causal_hidden_sizes,
@@ -231,9 +234,9 @@ class DenseNet(nn.Module):
         for i in range(self.num_dense_layers):
             dense_layers.append(
                 DenseLayer(
-                    self.num_feat,
-                    self.num_k_feat,
+                    self.causal_hidden_sizes[-1] + i * self.num_k_feat,
                     self.num_botnec_feat,
+                    self.num_k_feat,
                     self.activation
                 )
             )

@@ -1,4 +1,5 @@
 import linecache
+import typing as t
 
 import dgl
 import rdkit
@@ -10,6 +11,8 @@ from mol_spec import *
 from ops import *
 
 __all__ = [
+    'onehot_to_label',
+    'label_to_onehot',
     'smiles_to_dgl_graph',
     'ms',
     'graph_from_line',
@@ -24,7 +27,7 @@ ms = MoleculeSpec.get_default()
 def smiles_to_dgl_graph(
     smiles: str, 
     ms: MoleculeSpec = ms,
-    ranked: bool = False
+    ranked: bool=False  # wrong parameter name, whether it's a C scaffold
 ) -> dgl.DGLGraph:
     """Convert smiles to dgl graph
     
@@ -60,14 +63,24 @@ def smiles_to_dgl_graph(
     src, dst = tuple(zip(*ls_edge))
     g.add_edges(src, dst)
     g.add_edges(dst, src)
-    g.ndata['feat'] = label_to_onehot(
-        ls_atom_type, 
-        len(ms.atom_types)
-    )
-    g.edata['feat'] = label_to_onehot(
-        ls_edge_type, 
-        len(ms.bond_orders)
-    ).repeat(2, 1)
+    if ranked:
+        g.ndata['feat'] = label_to_onehot(
+            [0 for _ in ls_atom_type], 
+            1
+        )
+        g.edata['feat'] = label_to_onehot(
+            [0 for _ in ls_edge_type], 
+            1
+        ).repeat(2, 1)
+    else:
+        g.ndata['feat'] = label_to_onehot(
+            ls_atom_type, 
+            len(ms.atom_types)
+        )
+        g.edata['feat'] = label_to_onehot(
+            ls_edge_type, 
+            len(ms.bond_orders)
+        ).repeat(2, 1)
     return g
 
 
@@ -98,12 +111,13 @@ def str_from_line(
 
 def get_num_lines(
     input_file: str
-):
+) -> int:
     """Get num_of_lines of a text file
     Args:
         input_file (str): location of the file
 
-    Returns: num_lines of the file
+    Returns: 
+        int: num_lines of the file
 
     Examples:
         >>> get_num_lines("./dataset.txt")
@@ -116,7 +130,7 @@ def get_num_lines(
 def graph_from_line(
     file: str,
     idx: int,
-    ranked: bool = False
+    ranked: bool=False
 ) -> dgl.DGLGraph:
     smiles = str_from_line(
         file,
@@ -130,16 +144,31 @@ def graph_from_line(
     return g
 
 
+def get_nonzero_idx(sp: torch.sparse.FloatTensor) -> torch.LongTensor:
+    """Get indices of nonzero elements of a sparse tensor
+    
+    Args:
+        sp (torch.sparse.FloatTensor): a sparse tensor
+    
+    Returns:
+        torch.LongTensor: indices of nonzero elements
+    """
+    sp = sp.coalesce()
+    return sp.indices()[:, sp.values() > 0]
+
+
 def get_remote_connection(
     adj: torch.Tensor,
 ) -> t.Tuple[torch.Tensor, ...]:
     d = spmmsp(adj.coalesce(), adj.coalesce())
-    d_indices_2 = d.to_dense().nonzero().t()
+    # d_indices_2 = d.to_dense().nonzero().t()
+    d_indices_2 = get_nonzero_idx(d)
     d_indices_2 = d_indices_2[:, d_indices_2[0, :] != d_indices_2[1, :]]
     
     d = spmmsp(d.coalesce(), adj.coalesce())
     d = d - d.mul(adj)
-    d_indices_3 = d.to_dense().nonzero().t()
+    # d_indices_3 = d.to_dense().nonzero().t()
+    d_indices_3 = get_nonzero_idx(d)
     d_indices_3 = d_indices_3[:, d_indices_3[0, :] != d_indices_3[1, :]]
     return d_indices_2, d_indices_3
 
@@ -199,7 +228,7 @@ def graph_to_whole_graph(
         dim=0
     )
     num_n = n_feat.size(0)
-    num_e = all_e_feat.size(0)
+    # num_e = all_e_feat.size(0)
     ndata_new = torch.cat(
         (n_feat, torch.zeros(num_n, all_e_feat.size(1))),
         dim=1
@@ -247,7 +276,7 @@ def graph_to_whole_graph(
             )
         )
     )
-    return all_node_data, all_new_bond_info, adj
+    return onehot_to_label(all_node_data), all_new_bond_info, adj
 
 
 # def get_whole_data(
@@ -297,3 +326,28 @@ def graph_to_whole_graph(
 #     )
 
 #     return all_node_data, adj
+
+
+def get_activation(
+    name: str,
+    *args,
+    **kwargs
+) -> t.Callable:
+    """ Get activation module by name
+
+    Args:
+        name (str): The name of the activation function (relu, elu, selu)
+        args, kwargs: Other parameters
+
+    Returns:
+        nn.Module: The activation module
+    """
+    name = name.lower()
+    if name == 'relu':
+        return nn.ReLU(*args, **kwargs)
+    elif name == 'elu':
+        return nn.ELU(*args, **kwargs)
+    elif name == 'selu':
+        return nn.SELU(*args, **kwargs)
+    else:
+        raise ValueError('Activation not implemented')
