@@ -75,6 +75,9 @@ try:
                     c.ndata['feat'],
                     c.edata['feat']
                 )
+                s_nfeat, s_adj, c_nfeat = (
+                    s_nfeat.to(device), s_adj.to(device), c_nfeat.to(device)
+                )
                 x_recon, mu1, logvar1, mu2, logvar2 = (
                     model(s_nfeat, c_nfeat, s_adj)
                 )
@@ -84,7 +87,7 @@ try:
                 optim.step()
                 writer.add_scalar(
                     f'loss_{str(epoch)}',
-                    loss.item(),
+                    loss.cpu().item(),
                     step
                 )
                 torch.save(model, f'./ckpt/{t}/cktp_{str(epoch)}')

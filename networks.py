@@ -90,10 +90,10 @@ class GraphInf(nn.Module):
 
     def c_encode(self, feat_c, adj):
         h2 = self.c_dense(feat_c, adj)
-        return self.cfc1(h2), cfc2(h2)
+        return self.cfc1(h2), self.cfc2(h2)
 
-    def decode(self, z):
-        x_recon = self.dense2(z)
+    def decode(self, z, adj):
+        x_recon = self.dense2(z, adj)
         return x_recon
 
     def reparametrize(
@@ -103,10 +103,10 @@ class GraphInf(nn.Module):
     ):
         std = logvar.mul(0.5).exp_()
         if self.use_cuda and torch.cuda.is_available():
-            eps = torch.cuda.FloatTensor(std.size()).normal_()
+            eps = torch.FloatTensor(std.size()).normal_()
+            eps = torch.tensor(eps, device=std.device)
         else:
             eps = torch.FloatTensor(std.size()).normal_()
-        eps = Variable(eps)
         return eps.mul(std).add_(mu)
 
     def forward(
@@ -120,5 +120,5 @@ class GraphInf(nn.Module):
         mu1, logvar1 = self.encode(feat_o, adj)
         z = self.reparametrize(mu1, logvar1)
         x_recon = self.decode(z, adj)
-        mu2, logvar2 = c_encode(feat_c, adj)
+        mu2, logvar2 = self.c_encode(feat_c, adj)
         return x_recon, mu1, logvar1, mu2, logvar2
