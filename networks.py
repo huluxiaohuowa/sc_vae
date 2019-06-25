@@ -104,7 +104,7 @@ class GraphInf(nn.Module):
         std = logvar.mul(0.5).exp_()
         if self.use_cuda and torch.cuda.is_available():
             eps = torch.FloatTensor(std.size()).normal_()
-            eps = torch.tensor(eps, device=std.device)
+            eps = eps.to(std.device)
         else:
             eps = torch.FloatTensor(std.size()).normal_()
         return eps.mul(std).add_(mu)

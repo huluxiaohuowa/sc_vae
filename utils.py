@@ -65,28 +65,30 @@ def smiles_to_dgl_graph(
     g.add_edges(dst, src)
     if ranked:
         g.ndata['feat'] = label_to_onehot(
-            [0 for _ in ls_atom_type],
+            torch.LongTensor([0 for _ in ls_atom_type]),
             1
         )
         g.edata['feat'] = label_to_onehot(
-            [0 for _ in ls_edge_type],
+            torch.LongTensor([0 for _ in ls_edge_type]),
             1
         ).repeat(2, 1)
     else:
         g.ndata['feat'] = label_to_onehot(
-            ls_atom_type,
+            torch.LongTensor(ls_atom_type),
             len(ms.atom_types)
         )
         g.edata['feat'] = label_to_onehot(
-            ls_edge_type,
+            torch.LongTensor(ls_edge_type),
             len(ms.bond_orders)
         ).repeat(2, 1)
     return g
 
 
 def label_to_onehot(ls, class_num):
-    ls = torch.LongTensor(ls).reshape(-1, 1)
-    return torch.zeros(len(ls), class_num).scatter_(1, ls, 1)
+    ls = ls.reshape(-1, 1)
+    return torch.zeros(
+        (len(ls), class_num), device=ls.device
+    ).scatter_(1, ls, 1)
 
 
 def onehot_to_label(tensor):

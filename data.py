@@ -18,12 +18,12 @@ class Dataloader(object):
         original_scaffolds_file: str=op.join(
             op.dirname(__file__),
             'data-center',
-            'a_scaffolds.smi'
+            'scaffolds_a.smi'
         ),
         c_scaffolds_file: str=op.join(
             op.dirname(__file__),
             'data-center',
-            'c_scaffolds.smi'
+            'scaffolds_c.smi'
         ),
         batch_size: int=400,
         collate_fn: str='dgl',

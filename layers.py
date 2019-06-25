@@ -115,7 +115,8 @@ class WeaveLayer(nn.Module):
         n_feat: torch.Tensor,
         adj: torch.Tensor
     ):
-        assert adj.is_sparse
+        # adj = adj.to_sparse()
+        # assert adj.is_sparse
         n_feat = self.linear(n_feat)
         n_feat_self = n_feat * n_feat
         n_feat_adj = torch.mm(adj, n_feat)

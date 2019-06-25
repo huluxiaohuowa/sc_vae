@@ -11,21 +11,23 @@ __all__ = [
 
 
 def loss_func(recon_x, x, mu1, logvar1, mu2, logvar2):
-    loss_recon = nn.BCELoss(size_average=False)
-    BCE = loss_recon(recon_x, x)
+    loss_recon = nn.MSELoss()
+    loss_recon = loss_recon.to(recon_x.device)
+    MSE = loss_recon(recon_x, x)
 
     # KLD_element = mu.pow(2).add_(logvar.exp()).mul_(-1).add_(1).add_(logvar)
     # KLD = torch.sum(KLD_element).mul_(-0.5)
 
     KLD_element = (
-        (logvar2 - logvar1).add(
-            (logvar1.exp().add(mu1 - mu2).pow(2)).mul(0.5) - 1 / 2
+        (logvar2 - logvar1).mul(1 / 2).add(
+            (logvar1.exp().add((mu1 - mu2).pow(2))).div(2 * logvar2.exp()) -
+            1 / 2
         )
     )
     KLD = torch.sum(KLD_element)
 
     # KL divergence
-    return BCE + KLD
+    return MSE, KLD
 
 
 def spmmsp(

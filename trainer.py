@@ -2,6 +2,7 @@ import time
 
 from ipypb import ipb
 import torch
+# from torch import nn
 from torch.utils.tensorboard import SummaryWriter
 import adabound
 
@@ -10,27 +11,25 @@ from utils import *
 from ops import *
 from networks import *
 
-batch_size = 256
-device = torch.device('cuda:0')
+batch_size = 128
+device = torch.device('cuda:1')
 use_cuda = True
-nem_embeddings = 4
-casual_hidden_sizes = [32, 16]
-num_botnec_feat = 64
-num_k_feat = 16
-num_dense_layers = 4
-num_out_feat = 4
-num_z_feat = 4
+num_embeddings = 8
+casual_hidden_sizes = [16, 32]
+num_botnec_feat = 72
+num_k_feat = 24
+num_dense_layers = 20
+num_out_feat = 256
+num_z_feat = 2
 activation = 'elu'
-num_embeddings = 16
-
-device_ids = [0, 1, 2]
+# device_ids = [1,2,3]
 
 num_epochs = 10
 t = time.strftime('%Y%m%d-%H%M', time.localtime(time.time()))
 
 try:
     with SummaryWriter(f'./events/{t}/') as writer:
-        for epoch in ipb(range(num_epochs), decs="epochs"):
+        for epoch in ipb(range(num_epochs), desc="epochs"):
             model = GraphInf(
                 num_in_feat=39,
                 num_c_feat=4,
@@ -44,7 +43,7 @@ try:
                 activation=activation,
                 use_cuda=use_cuda
             )
-            model = nn.DataParallel(model, device_ids=device_ids)
+            # model = nn.DataParallel(model, device_ids=device_ids)
             model = model.to(device)
             model.train()
 
@@ -82,7 +81,11 @@ try:
                     model(s_nfeat, c_nfeat, s_adj)
                 )
                 optim.zero_grad()
-                loss = loss_func(recon_x, x, mu1, logvar1, mu2, logvar2)
+                feat = label_to_onehot(s_nfeat, 39)
+                MSE, KL = loss_func(
+                    x_recon, feat, mu1, logvar1, mu2, logvar2
+                )
+                loss = MSE + KL
                 loss.backward()
                 optim.step()
                 writer.add_scalar(
@@ -90,7 +93,17 @@ try:
                     loss.cpu().item(),
                     step
                 )
-                torch.save(model, f'./ckpt/{t}/cktp_{str(epoch)}')
+                writer.add_scalar(
+                    f'MSE_{str(epoch)}',
+                    MSE.cpu().item(),
+                    step
+                )
+                writer.add_scalar(
+                    f'KL_{str(epoch)}',
+                    KL.cpu().item(),
+                    step
+                )
+            torch.save(model, f'./ckpt/{t}/cktp_{str(epoch)}')
 
 except KeyboardInterrupt:
     torch.save(model, f'./ckpt/{t}/cktp_{str(epoch)}')
