@@ -38,20 +38,22 @@ class Dataloader(object):
         self.shuffled_id = list(range(self.num_line))
         random.shuffle(self.shuffled_id)
         self.num_id_block = (
-            self.num_line // self.batch_size if 
-            self.num_line % self.batch_size == 0 else 
+            self.num_line // self.batch_size if
+            self.num_line % self.batch_size == 0 else
             self.num_line // self.batch_size + 1
         )
         self.id_block = [
             self.shuffled_id[
-                i * self.batch_size:min((i + 1) * self.batch_size, self.num_line)
+                i * self.batch_size:min(
+                    (i + 1) * self.batch_size, self.num_line
+                )
             ]
             for i in range(self.num_id_block)
         ]
 
     def __len__(self):
         assert (
-            get_num_lines(self.o_scaffolds) == 
+            get_num_lines(self.o_scaffolds) ==
             get_num_lines(self.c_scaffolds)
         )
         return self.num_id_block
@@ -59,7 +61,7 @@ class Dataloader(object):
     def __iter__(self):
         for block in self.id_block:
             ls_o_scaffold = Parallel(
-                n_jobs=self.num_workers, 
+                n_jobs=self.num_workers,
                 backend='multiprocessing'
             )(
                 delayed(graph_from_line)
@@ -71,7 +73,7 @@ class Dataloader(object):
             )
 
             ls_c_scaffold = Parallel(
-                n_jobs=self.num_workers, 
+                n_jobs=self.num_workers,
                 backend='multiprocessing'
             )(
                 delayed(graph_from_line)

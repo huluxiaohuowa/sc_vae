@@ -1,4 +1,4 @@
-import typing as t 
+# import typing as t
 
 import torch
 from torch import nn
@@ -248,7 +248,7 @@ class DenseNet(nn.Module):
                 self.num_dense_layers * self.num_k_feat
             ),
             self.num_out_feat,
-            self.activation 
+            self.activation
         )
         
     def forward(
@@ -269,7 +269,7 @@ class DenseNet(nn.Module):
             ls_feat.append(feat_i)
         feat_cat = torch.cat(ls_feat, dim=-1)
         return self.output(feat_cat)
-        
+
 # class GraphConv(nn.Module):
 #     def __init__(
 #         self,
@@ -336,13 +336,12 @@ class DenseNet(nn.Module):
 
 class _Pooling(nn.Module):
     def __init__(
-        self, 
-        in_features: int, 
-        pooling_op: t.Callable=torch_scatter.scatter_mean, 
+        self,
+        in_features: int,
+        pooling_op: t.Callable=torch_scatter.scatter_mean,
         activation: str='elu'
     ):
         """Summary
-        
         Args:
             in_features (int): Description
             pooling_op (t.Callable, optional): Description
@@ -356,9 +355,9 @@ class _Pooling(nn.Module):
         self.pooling_op = pooling_op
 
     def forward(
-        self, 
-        x: torch.Tensor, 
-        ids: torch.Tensor, 
+        self,
+        x: torch.Tensor,
+        ids: torch.Tensor,
         num_seg: int=None
     ) -> torch.Tensor:
         """
@@ -375,9 +374,9 @@ class _Pooling(nn.Module):
 
         # performing segment operation
         x_pooled = self.pooling_op(
-            x_bn, 
-            dim=0, 
-            index=ids, 
+            x_bn,
+            dim=0,
+            index=ids,
             dim_size=num_seg
         )  # size=[num_seg, in_features]
 

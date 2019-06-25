@@ -8,10 +8,10 @@ from layers import *
 class GraphInf(nn.Module):
     def __init__(
         self,
-        num_in_feat: int,  # 
+        num_in_feat: int,  #
         num_c_in_feat: int,
-        num_embeddings: int,  # 
-        causal_hidden_sizes: t.Iterable,  # 
+        num_embeddings: int,  #
+        causal_hidden_sizes: t.Iterable,  #
         num_botnec_feat: int,  # 16 x 4
         num_k_feat: int,  # 16
         num_dense_layers: int,
@@ -20,7 +20,6 @@ class GraphInf(nn.Module):
         activation: str='elu',
         use_cuda: bool=True
     ):
-        
         self.num_in_feat = num_in_feat
         self.num_embeddings = num_embeddings
         self.embedding = nn.Embedding(num_in_feat, num_embeddings)
@@ -38,7 +37,7 @@ class GraphInf(nn.Module):
             num_k_feat=self.num_k_feat,
             num_dense_layers=self.num_dense_layers,
             num_out_feat=self.num_out_feat,
-            activation=self.activation 
+            activation=self.activation
         )
 
         self.dense2 = DenseNet(  # for decoding
@@ -48,7 +47,7 @@ class GraphInf(nn.Module):
             num_k_feat=self.num_k_feat,
             num_dense_layers=self.num_dense_layers,
             num_out_feat=self.num_in_feat,
-            activation=self.activation 
+            activation=self.activation
         )
 
         self.c_dense = DenseNet(
@@ -59,7 +58,7 @@ class GraphInf(nn.Module):
             num_dense_layers=self.num_dense_layers,
             num_out_feat=self.num_out_feat
         )
-        
+
         self.fc1 = nn.Linear(
             self.num_out_feat,
             self.num_z_feat
@@ -70,7 +69,12 @@ class GraphInf(nn.Module):
             self.num_z_feat
         )
 
-        self.c_fc = nn.Linear(
+        self.cfc1 = nn.Linear(
+            self.num_out_feat,
+            self.num_z_feat
+        )
+
+        self.cfc2 = nn.Linear(
             self.num_out_feat,
             self.num_z_feat
         )
@@ -78,6 +82,10 @@ class GraphInf(nn.Module):
     def encode(self, feat, adj):
         h1 = self.dense1(feat, adj)
         return self.fc1(h1), self.fc2(h1)
+
+    def c_encode(self, feat_c, adj):
+        h2 = self.c_dense(feat_c, adj)
+        return self.cfc1(h2), cfc2(h2)
 
     def decode(self, z):
         x_recon = self.dense2(z)
@@ -87,7 +95,7 @@ class GraphInf(nn.Module):
         self,
         mu,
         logvar
-    ): 
+    ):
         std = logvar.mul(0.5).exp_()
         if use_cuda and torch.cuda.is_available():
             eps = torch.cuda.FloatTensor(std.size()).normal_()
@@ -102,13 +110,8 @@ class GraphInf(nn.Module):
         feat_c: torch.Tensor,
         adj: torch.sparse.Tensor,
     ):
-        mu, logvar = self.encode(feat_o, adj)
+        mu1, logvar1 = self.encode(feat_o, adj)
         z = self.reparametrize(mu, logvar)
         x_recon = self.decode(z, adj)
-        c_z = self.c_dense(feat_c, adj)
-        
-
-
-
-
-
+        mu2, logvar2 = c_encode(feat_c, adj)
+        return x_recon, mu1, logvar1, mu2, logvar2

@@ -18,14 +18,14 @@ __all__ = [
     'graph_from_line',
     'get_num_lines',
     'str_from_line',
-    'graph_to_whole_graph',   
+    'graph_to_whole_graph',
 ]
 
 ms = MoleculeSpec.get_default()
 
 
 def smiles_to_dgl_graph(
-    smiles: str, 
+    smiles: str,
     ms: MoleculeSpec = ms,
     ranked: bool=False  # wrong parameter name, whether it's a C scaffold
 ) -> dgl.DGLGraph:
@@ -65,20 +65,20 @@ def smiles_to_dgl_graph(
     g.add_edges(dst, src)
     if ranked:
         g.ndata['feat'] = label_to_onehot(
-            [0 for _ in ls_atom_type], 
+            [0 for _ in ls_atom_type],
             1
         )
         g.edata['feat'] = label_to_onehot(
-            [0 for _ in ls_edge_type], 
+            [0 for _ in ls_edge_type],
             1
         ).repeat(2, 1)
     else:
         g.ndata['feat'] = label_to_onehot(
-            ls_atom_type, 
+            ls_atom_type,
             len(ms.atom_types)
         )
         g.edata['feat'] = label_to_onehot(
-            ls_edge_type, 
+            ls_edge_type,
             len(ms.bond_orders)
         ).repeat(2, 1)
     return g
@@ -94,7 +94,7 @@ def onehot_to_label(tensor):
 
 
 def str_from_line(
-    file: str, 
+    file: str,
     idx: int
 ) -> str:
     """
@@ -164,7 +164,6 @@ def get_remote_connection(
     # d_indices_2 = d.to_dense().nonzero().t()
     d_indices_2 = get_nonzero_idx(d)
     d_indices_2 = d_indices_2[:, d_indices_2[0, :] != d_indices_2[1, :]]
-    
     d = spmmsp(d.coalesce(), adj.coalesce())
     d = d - d.mul(adj)
     # d_indices_3 = d.to_dense().nonzero().t()
@@ -179,16 +178,16 @@ def graph_to_whole_graph(
     n_feat: torch.Tensor,
     e_feat: torch.Tensor
 ) -> t.Tuple[torch.Tensor, ...]:
-    """Involving remote connections and consider edges as nodes 
-    
+    """Involving remote connections and consider edges as nodes
+   
     Args:
-        adj (torch.Tensor): 
+        adj (torch.Tensor):
             adj with out self connections N x N
-        bond_info (torch.Tensor): 
+        bond_info (torch.Tensor):
             original bond info 2 x N_e
-        n_feat (torch.Tensor): 
+        n_feat (torch.Tensor):
             original node feat N x F
-        e_feat (torch.Tensor): 
+        e_feat (torch.Tensor):
             original edge feat N_e x F_e
     """
     # adj = g.adjacency_matrix()
@@ -196,16 +195,16 @@ def graph_to_whole_graph(
     # n_feat = g.ndata['feat']
     # e_feat = g.edata['feat']
 
-    num_n_feat, num_e_feat = n_feat.size(-1), e_feat.size(-1)
+    num_n_feat = n_feat.size(-1)
     d_indices_2, d_indices_3 = get_remote_connection(adj)
     all_bond_info = torch.cat([bond_info, d_indices_2, d_indices_3], dim=-1)
     all_e_feat = torch.cat(
         [
             torch.cat(
                 [
-                    e_feat, 
+                    e_feat,
                     torch.zeros([e_feat.size(0), 2])
-                ], 
+                ],
                 dim=-1
             ),
             torch.cat(
@@ -213,7 +212,7 @@ def graph_to_whole_graph(
                     torch.zeros([d_indices_2.size(-1), e_feat.size(-1)]),
                     torch.ones([d_indices_2.size(-1), 1]),
                     torch.zeros([d_indices_2.size(-1), 1])
-                ], 
+                ],
                 dim=-1
             ),
             torch.cat(
@@ -221,7 +220,7 @@ def graph_to_whole_graph(
                     torch.zeros([d_indices_3.size(-1), e_feat.size(-1)]),
                     torch.zeros([d_indices_3.size(-1), 1]),
                     torch.ones([d_indices_3.size(-1), 1])
-                ], 
+                ],
                 dim=-1
             )
         ],
