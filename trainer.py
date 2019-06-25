@@ -1,6 +1,7 @@
 import time
 
 from ipypb import ipb
+import torch
 from torch.utils.tensorboard import SummaryWriter
 import adabound
 
@@ -13,13 +14,14 @@ batch_size = 256
 device = torch.device('cuda:0')
 use_cuda = True
 nem_embeddings = 4
-casual_hidden_sizes = []
+casual_hidden_sizes = [32, 16]
 num_botnec_feat = 64
 num_k_feat = 16
-num_dense_layers = 14
+num_dense_layers = 4
 num_out_feat = 4
 num_z_feat = 4
 activation = 'elu'
+num_embeddings = 16
 
 device_ids = [0, 1, 2]
 
@@ -31,9 +33,9 @@ try:
         for epoch in ipb(range(num_epochs), decs="epochs"):
             model = GraphInf(
                 num_in_feat=39,
-                num_c_in_feat=4,
+                num_c_feat=4,
                 num_embeddings=num_embeddings,
-                causal_hidden_sizes=causal_hidden_sizes,
+                casual_hidden_sizes=casual_hidden_sizes,
                 num_botnec_feat=num_botnec_feat,  # 16 x 4
                 num_k_feat=num_k_feat,  # 16
                 num_dense_layers=num_dense_layers,

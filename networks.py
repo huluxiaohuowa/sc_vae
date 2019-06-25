@@ -1,5 +1,6 @@
 import typing as t
 
+import torch
 from torch import nn
 
 from layers import *
@@ -9,9 +10,9 @@ class GraphInf(nn.Module):
     def __init__(
         self,
         num_in_feat: int,  #
-        num_c_in_feat: int,
+        num_c_feat: int,
         num_embeddings: int,  #
-        causal_hidden_sizes: t.Iterable,  #
+        casual_hidden_sizes: t.Iterable,  #
         num_botnec_feat: int,  # 16 x 4
         num_k_feat: int,  # 16
         num_dense_layers: int,
@@ -20,19 +21,23 @@ class GraphInf(nn.Module):
         activation: str='elu',
         use_cuda: bool=True
     ):
+        super().__init__()
         self.num_in_feat = num_in_feat
         self.num_embeddings = num_embeddings
         self.embedding = nn.Embedding(num_in_feat, num_embeddings)
         self.c_embedding = nn.Embedding(num_c_feat, num_embeddings)
-        self.causal_hidden_sizes = causal_hidden_sizes
+        self.casual_hidden_sizes = casual_hidden_sizes
         self.num_botnec_feat = num_botnec_feat
         self.num_k_feat = num_k_feat
         self.num_dense_layers = num_dense_layers
         self.num_out_feat = num_out_feat
+        self.activation = activation
+        self.num_z_feat = num_z_feat
+        self.use_cuda = use_cuda
 
         self.dense1 = DenseNet(  # for encoding
-            num_feat=self.embedding,
-            causal_hidden_sizes=self.causal_hidden_sizes,
+            num_feat=self.num_embeddings,
+            casual_hidden_sizes=self.casual_hidden_sizes,
             num_botnec_feat=self.num_botnec_feat,
             num_k_feat=self.num_k_feat,
             num_dense_layers=self.num_dense_layers,
@@ -42,7 +47,7 @@ class GraphInf(nn.Module):
 
         self.dense2 = DenseNet(  # for decoding
             num_feat=self.num_z_feat,
-            causal_hidden_sizes=self.causal_hidden_sizes,
+            casual_hidden_sizes=self.casual_hidden_sizes,
             num_botnec_feat=self.num_botnec_feat,
             num_k_feat=self.num_k_feat,
             num_dense_layers=self.num_dense_layers,
@@ -52,7 +57,7 @@ class GraphInf(nn.Module):
 
         self.c_dense = DenseNet(
             num_feat=self.num_embeddings,
-            causal_hidden_sizes=self.causal_hidden_sizes,
+            casual_hidden_sizes=self.casual_hidden_sizes,
             num_botnec_feat=self.num_botnec_feat,
             num_k_feat=self.num_k_feat,
             num_dense_layers=self.num_dense_layers,
@@ -97,7 +102,7 @@ class GraphInf(nn.Module):
         logvar
     ):
         std = logvar.mul(0.5).exp_()
-        if use_cuda and torch.cuda.is_available():
+        if self.use_cuda and torch.cuda.is_available():
             eps = torch.cuda.FloatTensor(std.size()).normal_()
         else:
             eps = torch.FloatTensor(std.size()).normal_()
@@ -108,10 +113,12 @@ class GraphInf(nn.Module):
         self,
         feat_o: torch.Tensor,
         feat_c: torch.Tensor,
-        adj: torch.sparse.Tensor,
+        adj: torch.sparse.FloatTensor,
     ):
+        feat_o = self.embedding(feat_o)
+        feat_c = self.c_embedding(feat_c)
         mu1, logvar1 = self.encode(feat_o, adj)
-        z = self.reparametrize(mu, logvar)
+        z = self.reparametrize(mu1, logvar1)
         x_recon = self.decode(z, adj)
         mu2, logvar2 = c_encode(feat_c, adj)
         return x_recon, mu1, logvar1, mu2, logvar2

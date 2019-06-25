@@ -1,4 +1,4 @@
-# import typing as t
+import typing as t
 
 import torch
 from torch import nn
@@ -12,7 +12,9 @@ __all__ = [
     "WeaveLayer",
     "DenseNet",
     "AvgPooling",
-    "SumPooling"
+    "SumPooling",
+    "CasualWeave",
+    "DenseLayer"
 ]
 
 
@@ -66,7 +68,7 @@ class BNReLULinear(nn.Module):
 
 
 class WeaveLayer(nn.Module):
-    def __init(
+    def __init__(
         self,
         # num_v_in_feat: int,
         # num_v_out_feat: int,
@@ -86,25 +88,25 @@ class WeaveLayer(nn.Module):
         self.activation = activation
         if self.activation is not None:
             self.linear = BNReLULinear(
-                self.in_features,
-                self.out_features,
+                self.num_in_feat,
+                self.num_out_feat,
                 self.activation
             )
             # self.elinear = BNReLULinear(
             #     self.in_features,
-            #     self.out_features,
+            #     self.num_out_feat,
             #     self.activation
             # )
 
         else:
             self.linear = nn.Linear(
-                self.in_features,
-                self.out_features * self.num_bond_types,
+                self.num_in_feat,
+                self.num_out_feat,
                 self.activation
             )
             # self.elinear = nn.Linear(
-            #     self.in_features,
-            #     self.out_features * self.num_bond_types,
+            #     self.num_in_feat,
+            #     self.num_out_feat,* self.num_bond_types,
             #     self.activation
             # )
 
@@ -128,6 +130,7 @@ class CasualWeave(nn.Module):
         hidden_sizes: t.Iterable,
         activation: str='elu'
     ):
+        super().__init__()
         self.num_feat = num_feat
         self.hidden_sizes = list(hidden_sizes)
         self.activation = activation
@@ -180,6 +183,7 @@ class DenseLayer(nn.Module):
         num_out_feat: int,
         activation: str = 'elu',
     ):
+        super().__init__()
         self.num_in_feat = num_in_feat
         self.num_out_feat = num_out_feat
         self.num_botnec_feat = num_botnec_feat
@@ -208,33 +212,37 @@ class DenseLayer(nn.Module):
             feat,
             adj
         )
-        
-        
+
+
 class DenseNet(nn.Module):
     def __init__(
         self,
         num_feat: int,
-        causal_hidden_sizes: t.Iterable,
+        casual_hidden_sizes: t.Iterable,
         num_botnec_feat: int,
         num_k_feat: int,
         num_dense_layers: int,
         num_out_feat: int,
         activation: str='elu'
     ):
+        super().__init__()
         self.num_feat = num_feat
         self.num_dense_layers = num_dense_layers
-        self.causal_hidden_sizes = list(causal_hidden_sizes)
+        self.casual_hidden_sizes = list(casual_hidden_sizes)
         self.num_out_feat = num_out_feat
+        self.activation = activation
+        self.num_k_feat = num_k_feat
+        self.num_botnec_feat = num_botnec_feat
         self.casual = CasualWeave(
             self.num_feat,
-            self.causal_hidden_sizes,
+            self.casual_hidden_sizes,
             self.activation
         )
         dense_layers = []
         for i in range(self.num_dense_layers):
             dense_layers.append(
                 DenseLayer(
-                    self.causal_hidden_sizes[-1] + i * self.num_k_feat,
+                    self.casual_hidden_sizes[-1] + i * self.num_k_feat,
                     self.num_botnec_feat,
                     self.num_k_feat,
                     self.activation
@@ -244,13 +252,13 @@ class DenseNet(nn.Module):
 
         self.output = BNReLULinear(
             (
-                self.causal_hidden_sizes[-1] +
+                self.casual_hidden_sizes[-1] +
                 self.num_dense_layers * self.num_k_feat
             ),
             self.num_out_feat,
             self.activation
         )
-        
+
     def forward(
         self,
         feat,

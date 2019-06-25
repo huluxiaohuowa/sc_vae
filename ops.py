@@ -1,4 +1,4 @@
-# import typing as t
+import typing as t
 
 import torch
 from torch import nn
@@ -47,3 +47,27 @@ def spmmsp(
         torch.Size([m, n])
     )
 
+
+def get_activation(
+    name: str,
+    *args,
+    **kwargs
+) -> t.Callable:
+    """ Get activation module by name
+
+    Args:
+        name (str): The name of the activation function (relu, elu, selu)
+        args, kwargs: Other parameters
+
+    Returns:
+        nn.Module: The activation module
+    """
+    name = name.lower()
+    if name == 'relu':
+        return nn.ReLU(*args, **kwargs)
+    elif name == 'elu':
+        return nn.ELU(*args, **kwargs)
+    elif name == 'selu':
+        return nn.SELU(*args, **kwargs)
+    else:
+        raise ValueError('Activation not implemented')
