@@ -11,7 +11,7 @@ __all__ = [
 
 
 def loss_func(recon_x, x, mu1, logvar1, mu2, logvar2):
-    loss_recon = nn.MSELoss()
+    loss_recon = nn.CrossEntropyLoss()
     loss_recon = loss_recon.to(recon_x.device)
     MSE = loss_recon(recon_x, x)
 

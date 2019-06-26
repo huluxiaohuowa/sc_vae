@@ -78,12 +78,18 @@ class Dataloader(object):
             )(
                 delayed(graph_from_line)
                 (
-                    self.c_scaffolds,
+                    self.o_scaffolds,
                     i,
                     True
                 )
                 for i in block
             )
 
-            yield dgl.batch(ls_o_scaffold), dgl.batch(ls_c_scaffold)
+            ls_o_scaffold_clean = [_ for _ in ls_o_scaffold if _ is not None]
+            ls_c_scaffold_clean = [_ for _ in ls_c_scaffold if _ is not None]
+
+            yield (
+                dgl.batch(ls_o_scaffold_clean),
+                dgl.batch(ls_c_scaffold_clean)
+            )
             # yield block

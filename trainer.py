@@ -1,10 +1,11 @@
 import time
+from os import path, makedirs
 
 from ipypb import ipb
 import torch
 # from torch import nn
 from torch.utils.tensorboard import SummaryWriter
-import adabound
+# import adabound
 
 from data import *
 from utils import *
@@ -22,6 +23,7 @@ num_dense_layers = 20
 num_out_feat = 256
 num_z_feat = 2
 activation = 'elu'
+lr = 1e-3
 # device_ids = [1,2,3]
 
 num_epochs = 10
@@ -30,6 +32,8 @@ t = time.strftime('%Y%m%d-%H%M', time.localtime(time.time()))
 try:
     with SummaryWriter(f'./events/{t}/') as writer:
         for epoch in ipb(range(num_epochs), desc="epochs"):
+            if not path.exists(f'./ckpt/{t}/'):
+                makedirs(f'./ckpt/{t}/')
             model = GraphInf(
                 num_in_feat=39,
                 num_c_feat=4,
@@ -47,10 +51,14 @@ try:
             model = model.to(device)
             model.train()
 
-            optim = adabound.AdaBound(
+            # optim = adabound.AdaBound(
+            #     model.parameters(),
+            #     lr=1e-3,
+            #     final_lr=0.01
+            # )
+            optim = torch.optim.SGD(
                 model.parameters(),
-                lr=1e-3,
-                final_lr=0.1
+                lr=lr
             )
 
             dataloader = Dataloader(batch_size=batch_size)
@@ -81,9 +89,8 @@ try:
                     model(s_nfeat, c_nfeat, s_adj)
                 )
                 optim.zero_grad()
-                feat = label_to_onehot(s_nfeat, 39)
                 MSE, KL = loss_func(
-                    x_recon, feat, mu1, logvar1, mu2, logvar2
+                    x_recon, s_nfeat, mu1, logvar1, mu2, logvar2
                 )
                 loss = MSE + KL
                 loss.backward()
@@ -103,7 +110,7 @@ try:
                     KL.cpu().item(),
                     step
                 )
-                # print(loss, MSE, KL)
+                # print(loss.item(), MSE.item(), KL.item())
             torch.save(model, f'./ckpt/{t}/cktp_{str(epoch)}')
 
 except KeyboardInterrupt:
