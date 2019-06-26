@@ -2,7 +2,9 @@ import typing as t
 
 import torch
 from torch import nn
+# from torch import functional as F
 from torch_sparse import spspmm
+import torch_scatter
 
 __all__ = [
     'loss_func',
@@ -10,24 +12,30 @@ __all__ = [
 ]
 
 
-def loss_func(recon_x, x, mu1, logvar1, mu2, logvar2):
-    loss_recon = nn.CrossEntropyLoss()
-    loss_recon = loss_recon.to(recon_x.device)
-    MSE = loss_recon(recon_x, x)
+def loss_func(recon_x, x, mu1, logvar1, mu2, logvar2, seg_ids):
+    seg_ids = seg_ids.to(mu1.device)
+    loss_recon = nn.CrossEntropyLoss().to(recon_x.device)
+    softplus = nn.Softplus().to(recon_x.device)
+    rec_loss = loss_recon(recon_x, x)
 
     # KLD_element = mu.pow(2).add_(logvar.exp()).mul_(-1).add_(1).add_(logvar)
     # KLD = torch.sum(KLD_element).mul_(-0.5)
 
     KLD_element = (
         (logvar2 - logvar1).mul(1 / 2).add(
-            (logvar1.exp().add((mu1 - mu2).pow(2))).div(2 * logvar2.exp()) -
+            (
+                softplus(logvar1).add((mu1 - mu2).pow(2))
+            ).div(2 * softplus(logvar2)) -
             1 / 2
         )
     )
-    KLD = KLD_element.mean()
+    KLD = torch_scatter.scatter_add(
+        KLD_element, seg_ids, dim=0
+    ).sum(dim=-1).mean()
+    # KLD = KLD_element.mean()
 
     # KL divergence
-    return MSE, KLD
+    return rec_loss, KLD
 
 
 def spmmsp(

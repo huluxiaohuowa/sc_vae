@@ -5,7 +5,7 @@ from ipypb import ipb
 import torch
 # from torch import nn
 from torch.utils.tensorboard import SummaryWriter
-# import adabound
+import adabound
 
 from data import *
 from utils import *
@@ -23,7 +23,8 @@ num_dense_layers = 20
 num_out_feat = 256
 num_z_feat = 2
 activation = 'elu'
-lr = 1e-3
+LR=1e-3,
+final_LR=0.1
 # device_ids = [1,2,3]
 
 num_epochs = 10
@@ -51,15 +52,15 @@ try:
             model = model.to(device)
             model.train()
 
-            # optim = adabound.AdaBound(
-            #     model.parameters(),
-            #     lr=1e-3,
-            #     final_lr=0.01
-            # )
-            optim = torch.optim.SGD(
+            optim = adabound.AdaBound(
                 model.parameters(),
-                lr=lr
+                lr=1e-3,
+                final_lr=0.01
             )
+            # optim = torch.optim.SGD(
+            #     model.parameters(),
+            #     lr=lr
+            # )
 
             dataloader = Dataloader(batch_size=batch_size)
 
@@ -70,27 +71,44 @@ try:
                     total=dataloader.num_id_block
                 )
             ):
-                s_nfeat, s_einfo, s_adj = graph_to_whole_graph(
-                    s.adjacency_matrix(),
-                    torch.stack(s.edges(), dim=0),
+                # s_nfeat, s_einfo, s_adj = graph_to_whole_graph(
+                #     s.adjacency_matrix(),
+                #     torch.stack(s.edges(), dim=0),
+                #     s.ndata['feat'],
+                #     s.edata['feat']
+                # )
+                # c_nfeat, c_einfo, c_adj = graph_to_whole_graph(
+                #     c.adjacency_matrix(),
+                #     torch.stack(c.edges(), dim=0),
+                #     c.ndata['feat'],
+                #     c.edata['feat']
+                # )
+                s_nfeat, s_adj = (
                     s.ndata['feat'],
-                    s.edata['feat']
+                    s.adjacency_matrix() +
+                    torch.eye(s.number_of_nodes()).to_sparse()
                 )
-                c_nfeat, c_einfo, c_adj = graph_to_whole_graph(
-                    c.adjacency_matrix(),
-                    torch.stack(c.edges(), dim=0),
-                    c.ndata['feat'],
-                    c.edata['feat']
-                )
+                c_nfeat = c.ndata['feat']
                 s_nfeat, s_adj, c_nfeat = (
                     s_nfeat.to(device), s_adj.to(device), c_nfeat.to(device)
                 )
+                s_nfeat = onehot_to_label(s_nfeat)
+                c_nfeat = onehot_to_label(c_nfeat) 
+
+                seg_id_block = [
+                    torch.LongTensor([i]).repeat(j)
+                    for i, j in enumerate(s.batch_num_nodes)
+                ]
+
+                seg_ids = torch.cat(seg_id_block, dim=-1)
+
                 x_recon, mu1, logvar1, mu2, logvar2 = (
                     model(s_nfeat, c_nfeat, s_adj)
                 )
+
                 optim.zero_grad()
                 MSE, KL = loss_func(
-                    x_recon, s_nfeat, mu1, logvar1, mu2, logvar2
+                    x_recon, s_nfeat, mu1, logvar1, mu2, logvar2, seg_ids
                 )
                 loss = MSE + KL
                 loss.backward()

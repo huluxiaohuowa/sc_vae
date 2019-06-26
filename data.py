@@ -64,7 +64,7 @@ class Dataloader(object):
                 n_jobs=self.num_workers,
                 backend='multiprocessing'
             )(
-                delayed(graph_from_line)
+                delayed(whole_graph_from_line)
                 (
                     self.o_scaffolds,
                     i
@@ -76,7 +76,7 @@ class Dataloader(object):
                 n_jobs=self.num_workers,
                 backend='multiprocessing'
             )(
-                delayed(graph_from_line)
+                delayed(whole_graph_from_line)
                 (
                     self.o_scaffolds,
                     i,

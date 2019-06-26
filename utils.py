@@ -2,7 +2,7 @@ import linecache
 import typing as t
 
 import dgl
-import rdkit
+# import rdkit
 from rdkit import Chem
 from rdkit.Chem import AllChem
 import torch
@@ -19,6 +19,8 @@ __all__ = [
     'get_num_lines',
     'str_from_line',
     'graph_to_whole_graph',
+    'get_remote_connection',
+    'whole_graph_from_line'
 ]
 
 ms = MoleculeSpec.get_default()
@@ -121,7 +123,7 @@ def get_num_lines(
     Args:
         input_file (str): location of the file
 
-    Returns: 
+    Returns:
         int: num_lines of the file
 
     Examples:
@@ -177,7 +179,7 @@ def get_remote_connection(
     return d_indices_2, d_indices_3
 
 
-def graph_to_whole_graph(
+def graph_to_whole_graph2(
     adj: torch.Tensor,
     bond_info: torch.Tensor,
     n_feat: torch.Tensor,
@@ -246,7 +248,7 @@ def graph_to_whole_graph(
         dim=0
     )
     n_new = torch.arange(
-        num_n, 
+        num_n,
         all_node_data.size(0)
     )
     all_new_bond_info = torch.cat(
@@ -282,6 +284,90 @@ def graph_to_whole_graph(
     )
     return onehot_to_label(all_node_data), all_new_bond_info, adj
 
+
+def graph_to_whole_graph(
+    g: dgl.DGLGraph
+) -> dgl.DGLGraph:
+    g.set_n_initializer(dgl.init.zero_initializer)
+    g.set_e_initializer(dgl.init.zero_initializer)
+    adj = g.adjacency_matrix()
+    d_indices_2, d_indices_3 = get_remote_connection(adj)
+    e_data = g.edata['feat']
+    g.add_edges(d_indices_2[0], d_indices_2[1])
+    g.add_edges(d_indices_3[0], d_indices_3[1])
+    g.edata['feat'] = torch.cat(
+        [
+            torch.cat([e_data, torch.zeros([e_data.size(0), 2])], dim=-1),
+            torch.cat(
+                [
+                    torch.zeros([d_indices_2.size(-1), e_data.size(-1)]),
+                    torch.ones([d_indices_2.size(-1), 1]),
+                    torch.zeros([d_indices_2.size(-1), 1])
+                ], dim=-1),
+            torch.cat(
+                [
+                    torch.zeros([d_indices_3.size(-1), e_data.size(-1)]),
+                    torch.zeros([d_indices_3.size(-1), 1]),
+                    torch.ones([d_indices_3.size(-1), 1])
+                ], dim=-1)
+        ],
+        dim=0
+    )
+    g_new = dgl.DGLGraph()
+    g_new.add_nodes(g.number_of_nodes() + g.number_of_edges())
+    n_add = torch.arange(g.number_of_nodes(), g_new.number_of_nodes())
+    ndata_new = torch.cat(
+        (
+            g.ndata['feat'],
+            torch.zeros((g.number_of_nodes(), g.edata['feat'].size(-1)))
+        ),
+        dim=-1
+    )
+    edata_new = torch.cat(
+        (
+            torch.zeros((g.edata['feat'].size(0), g.ndata['feat'].size(-1))),
+            g.edata['feat']
+        ),
+        dim=-1
+    )
+    all_node_data = torch.cat(
+        (ndata_new, edata_new),
+        dim=0
+    )
+    g_new.ndata['feat'] = all_node_data
+    all_new_bond_info = torch.cat(
+        [
+            torch.stack(
+                [g.edges()[0], n_add],
+                dim=0
+            ),
+            torch.stack(
+                [n_add, g.edges()[0]],
+                dim=0
+            ),
+            torch.stack(
+                [g.edges()[1], n_add],
+                dim=0
+            ),
+            torch.stack(
+                [n_add, g.edges()[1]],
+                dim=0
+            ),
+
+        ],
+        dim=-1
+    )
+    g_new.add_edges(all_new_bond_info[0], all_new_bond_info[1])
+    return g_new
+
+
+def whole_graph_from_line(
+    file: str,
+    idx: int,
+    ranked: bool=False
+) -> dgl.DGLGraph:
+    g = graph_from_line(file, idx, ranked)
+    return graph_to_whole_graph(g)
 
 # def get_whole_data(
 #     g: dgl.graph.DGLGraph,
