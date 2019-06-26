@@ -12,23 +12,26 @@ __all__ = [
 ]
 
 
-def loss_func(recon_x, x, mu1, logvar1, mu2, logvar2, seg_ids):
+def loss_func(recon_x, x, mu1, var1, mu2, var2, seg_ids):
     seg_ids = seg_ids.to(mu1.device)
     loss_recon = nn.CrossEntropyLoss().to(recon_x.device)
-    softplus = nn.Softplus().to(recon_x.device)
     rec_loss = loss_recon(recon_x, x)
 
     # KLD_element = mu.pow(2).add_(logvar.exp()).mul_(-1).add_(1).add_(logvar)
     # KLD = torch.sum(KLD_element).mul_(-0.5)
 
-    KLD_element = (
-        (logvar2 - logvar1).mul(1 / 2).add(
-            (
-                softplus(logvar1).add((mu1 - mu2).pow(2))
-            ).div(2 * softplus(logvar2)) -
-            1 / 2
-        )
-    )
+    # KLD_element = (
+    #     (logvar2 - logvar1).mul(1 / 2).add(
+    #         (
+    #             logvar1.exp().add((mu1 - mu2).pow(2))
+    #         ).div(2 * logvar2.exp()) -
+    #         1 / 2
+    #     )
+    # )
+
+    KLD_element = var2.div(var1).log().mul(0.5) + (
+        var1 + (mu1 - mu2).pow(2)
+    ).div(2 * var2) - 0.5
     KLD = torch_scatter.scatter_add(
         KLD_element, seg_ids, dim=0
     ).sum(dim=-1).mean()

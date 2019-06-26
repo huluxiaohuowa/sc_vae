@@ -93,7 +93,7 @@ try:
                     s_nfeat.to(device), s_adj.to(device), c_nfeat.to(device)
                 )
                 s_nfeat = onehot_to_label(s_nfeat)
-                c_nfeat = onehot_to_label(c_nfeat) 
+                c_nfeat = onehot_to_label(c_nfeat)
 
                 seg_id_block = [
                     torch.LongTensor([i]).repeat(j)

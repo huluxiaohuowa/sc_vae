@@ -64,6 +64,8 @@ class GraphInf(nn.Module):
             num_out_feat=self.num_out_feat
         )
 
+        self.softplus = nn.Softplus()
+
         self.fc1 = nn.Linear(
             self.num_out_feat,
             self.num_z_feat
@@ -99,9 +101,9 @@ class GraphInf(nn.Module):
     def reparametrize(
         self,
         mu,
-        logvar
+        var
     ):
-        std = logvar.mul(0.5).exp_()
+        std = var.sqrt()
         if self.use_cuda and torch.cuda.is_available():
             eps = torch.FloatTensor(std.size()).normal_()
             eps = eps.to(std.device)
@@ -117,8 +119,9 @@ class GraphInf(nn.Module):
     ):
         feat_o = self.embedding(feat_o)
         feat_c = self.c_embedding(feat_c)
-        mu1, logvar1 = self.encode(feat_o, adj)
-        z = self.reparametrize(mu1, logvar1)
+        mu2, x_2 = self.c_encode(feat_c, adj)
+        mu1, x_1 = self.encode(feat_o, adj)
+        var1, var2 = self.softplus(x_1), self.softplus(x_2)
+        z = self.reparametrize(mu1, var1)
         x_recon = self.decode(z, adj)
-        mu2, logvar2 = self.c_encode(feat_c, adj)
-        return x_recon, mu1, logvar1, mu2, logvar2
+        return x_recon, mu1, var1, mu2, var2
