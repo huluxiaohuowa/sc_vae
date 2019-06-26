@@ -5,4 +5,4 @@
 [submodule "data-center.git"]
 	path = data-center
 	url = ssh://git@ddl.bjmu.edu.cn:15806/scaffold-network/data-center.git
-    # ignore = all
+    ignore = all
