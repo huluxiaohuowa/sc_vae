@@ -24,7 +24,7 @@ def loss_func(recon_x, x, mu1, logvar1, mu2, logvar2):
             1 / 2
         )
     )
-    KLD = torch.sum(KLD_element)
+    KLD = KLD_element.mean()
 
     # KL divergence
     return MSE, KLD
