@@ -103,7 +103,7 @@ try:
                     KL.cpu().item(),
                     step
                 )
-                print(loss, MSE, KL)
+                # print(loss, MSE, KL)
             torch.save(model, f'./ckpt/{t}/cktp_{str(epoch)}')
 
 except KeyboardInterrupt:
