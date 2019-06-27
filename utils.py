@@ -1,5 +1,6 @@
 import linecache
 import typing as t
+from random import shuffle
 
 import dgl
 # import rdkit
@@ -20,17 +21,83 @@ __all__ = [
     'str_from_line',
     'graph_to_whole_graph',
     'get_remote_connection',
-    'whole_graph_from_line'
+    'whole_graph_from_smiles',
+    'str_block_gen'
 ]
 
 ms = MoleculeSpec.get_default()
+
+_file_name_to_content = {}
+
+
+def _get_file_by_line(file_name: str, line_id: int):
+    if file_name not in _file_name_to_content:
+        with open(file_name) as f:
+            file_content = tuple([line.rstrip() for line in f])
+        _file_name_to_content[file_name] = file_content
+    return _file_name_to_content[file_name][line_id]
+
+
+# def block_id_gen(
+#     file: str,
+#     batch_size: int
+# ):
+#     num_lines = get_num_lines(file)
+#     ids = list(range(num_lines))
+#     shuffle(ids)
+#     num_id_block = (
+#         num_lines // batch_size if
+#         num_lines % batch_size == 0 else
+#         num_lines // batch_size + 1
+#     )
+#     id_block = [
+#         ids[
+#             i * batch_size:min(
+#                 (i + 1) * batch_size, num_lines
+#             )
+#         ]
+#         for i in range(num_id_block)
+#     ]
+#     return id_block
+
+
+def str_block_gen(
+    file: str,
+    batch_size: int
+):
+    num_lines = get_num_lines(file)
+    ids = list(range(num_lines))
+    shuffle(ids)
+    num_id_block = (
+        num_lines // batch_size if
+        num_lines % batch_size == 0 else
+        num_lines // batch_size + 1
+    )
+    ids_block = [
+        ids[
+            i * batch_size:min(
+                (i + 1) * batch_size, num_lines
+            )
+        ]
+        for i in range(num_id_block)
+    ]
+
+    smiles_block = [
+        [_get_file_by_line(file, i) for i in block] for block in ids_block
+    ]
+
+    return smiles_block
+
+    # for block in ids_block:
+    #     str_block = [_get_file_by_line(file, i) for i in block]
+    #     yield str_block
 
 
 def smiles_to_dgl_graph(
     smiles: str,
     ms: MoleculeSpec = ms,
-    ranked: bool=False  # wrong parameter name, whether it's a C scaffold
-) -> dgl.DGLGraph:
+    # ranked: bool=False  # wrong parameter name, whether it's a C scaffold
+) -> t.Tuple:
     """Convert smiles to dgl graph
     Args:
         smiles (str): a molecule smiles
@@ -42,51 +109,51 @@ def smiles_to_dgl_graph(
 
         m = Chem.RemoveHs(m)
         g = dgl.DGLGraph()
+        cg = dgl.DGLGraph()
+
         g.add_nodes(m.GetNumAtoms())
+        cg.add_nodes(m.GetNumAtoms())
 
         ls_edge = [
             (e.GetBeginAtomIdx(), e.GetEndAtomIdx()) for e in m.GetBonds()
         ]
-        # if ranked:
-        #     ls_atom_type = [
-        #         ms.atom_types.index(('C', 0, 0)) for _ in m.GetAtoms()
-        #     ]
-        #     ls_edge_type = [
-        #         ms.bond_orders.index(rdkit.Chem.rdchem.BondType.SINGLE)
-        #         for _ in m.GetBonds()
-        #     ]
-        # else:
+
         ls_atom_type = [
             ms.get_atom_type(atom) for atom in m.GetAtoms()
         ]
         ls_edge_type = [
             ms.get_bond_type(bond) for bond in m.GetBonds()
         ]
+
         src, dst = tuple(zip(*ls_edge))
+
         g.add_edges(src, dst)
         g.add_edges(dst, src)
 
-        if ranked:
-            g.ndata['feat'] = label_to_onehot(
-                torch.LongTensor([0 for _ in ls_atom_type]),
-                1
-            )
-            g.edata['feat'] = label_to_onehot(
-                torch.LongTensor([0 for _ in ls_edge_type]),
-                1
-            ).repeat(2, 1)
-        else:
-            g.ndata['feat'] = label_to_onehot(
-                torch.LongTensor(ls_atom_type),
-                len(ms.atom_types)
-            )
-            g.edata['feat'] = label_to_onehot(
-                torch.LongTensor(ls_edge_type),
-                len(ms.bond_orders)
-            ).repeat(2, 1)
-        return g
+        cg.add_edges(src, dst)
+        cg.add_edges(dst, src)
+
+        # if ranked:
+        cg.ndata['feat'] = label_to_onehot(
+            torch.LongTensor([0 for _ in ls_atom_type]),
+            1
+        )
+        cg.edata['feat'] = label_to_onehot(
+            torch.LongTensor([0 for _ in ls_edge_type]),
+            1
+        ).repeat(2, 1)
+        # else:
+        g.ndata['feat'] = label_to_onehot(
+            torch.LongTensor(ls_atom_type),
+            len(ms.atom_types)
+        )
+        g.edata['feat'] = label_to_onehot(
+            torch.LongTensor(ls_edge_type),
+            len(ms.bond_orders)
+        ).repeat(2, 1)
+        return (g, cg)
     except:
-        return None
+        return (None, None)
 
 
 def label_to_onehot(ls, class_num):
@@ -361,13 +428,11 @@ def graph_to_whole_graph(
     return g_new
 
 
-def whole_graph_from_line(
-    file: str,
-    idx: int,
-    ranked: bool=False
-) -> dgl.DGLGraph:
-    g = graph_from_line(file, idx, ranked)
-    return graph_to_whole_graph(g)
+def whole_graph_from_smiles(
+    smiles: str,
+) -> t.Tuple:
+    g, cg = smiles_to_dgl_graph(smiles)
+    return (graph_to_whole_graph(g), graph_to_whole_graph(cg))
 
 # def get_whole_data(
 #     g: dgl.graph.DGLGraph,

@@ -23,40 +23,38 @@ num_dense_layers = 20
 num_out_feat = 256
 num_z_feat = 2
 activation = 'elu'
-LR=1e-3,
-final_LR=0.1
-# device_ids = [1,2,3]
+LR = 1e-3
+final_lr = 0.1
+beta = 1
 
 num_epochs = 10
 t = time.strftime('%Y%m%d-%H%M', time.localtime(time.time()))
-
+model = GraphInf(
+    num_in_feat=39,
+    num_c_feat=4,
+    num_embeddings=num_embeddings,
+    casual_hidden_sizes=casual_hidden_sizes,
+    num_botnec_feat=num_botnec_feat,  # 16 x 4
+    num_k_feat=num_k_feat,  # 16
+    num_dense_layers=num_dense_layers,
+    num_out_feat=num_out_feat,
+    num_z_feat=num_z_feat,
+    activation=activation,
+    use_cuda=use_cuda
+)
+optim = adabound.AdaBound(
+    model.parameters(),
+    lr=LR,
+    final_lr=final_lr
+)
+# model = nn.DataParallel(model, device_ids=device_ids)
+model = model.to(device)
+model.train()
 try:
     with SummaryWriter(f'./events/{t}/') as writer:
         for epoch in ipb(range(num_epochs), desc="epochs"):
             if not path.exists(f'./ckpt/{t}/'):
                 makedirs(f'./ckpt/{t}/')
-            model = GraphInf(
-                num_in_feat=39,
-                num_c_feat=4,
-                num_embeddings=num_embeddings,
-                casual_hidden_sizes=casual_hidden_sizes,
-                num_botnec_feat=num_botnec_feat,  # 16 x 4
-                num_k_feat=num_k_feat,  # 16
-                num_dense_layers=num_dense_layers,
-                num_out_feat=num_out_feat,
-                num_z_feat=num_z_feat,
-                activation=activation,
-                use_cuda=use_cuda
-            )
-            # model = nn.DataParallel(model, device_ids=device_ids)
-            model = model.to(device)
-            model.train()
-
-            optim = adabound.AdaBound(
-                model.parameters(),
-                lr=1e-3,
-                final_lr=0.01
-            )
             # optim = torch.optim.SGD(
             #     model.parameters(),
             #     lr=lr
@@ -83,11 +81,25 @@ try:
                 #     c.ndata['feat'],
                 #     c.edata['feat']
                 # )
-                s_nfeat, s_adj = (
-                    s.ndata['feat'],
-                    s.adjacency_matrix() +
-                    torch.eye(s.number_of_nodes()).to_sparse()
+
+                num_N = s.number_of_nodes()
+                num_E = s.number_of_edges()
+                adj = s.adjacency_matrix().coalesce()
+
+                indices = torch.cat(
+                    [adj.indices(), torch.arange(0, num_N).repeat(2, 1)],
+                    dim=-1
                 )
+
+                values = torch.ones(num_E + num_N)
+
+                s_adj = torch.sparse_coo_tensor(
+                    indices,
+                    values,
+                    torch.Size([num_N, num_N])
+                )
+
+                s_nfeat = s.ndata['feat']
                 c_nfeat = c.ndata['feat']
                 s_nfeat, s_adj, c_nfeat = (
                     s_nfeat.to(device), s_adj.to(device), c_nfeat.to(device)
@@ -110,7 +122,7 @@ try:
                 MSE, KL = loss_func(
                     x_recon, s_nfeat, mu1, logvar1, mu2, logvar2, seg_ids
                 )
-                loss = MSE + KL
+                loss = MSE + beta * KL
                 loss.backward()
                 optim.step()
                 writer.add_scalar(
