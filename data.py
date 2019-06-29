@@ -1,8 +1,12 @@
 import os.path as op
 from multiprocessing import cpu_count
+import typing as t
+from threading import Thread
 # import random
 
-from joblib import Parallel, delayed
+# from joblib import Parallel, delayed
+import multiprocess as mp
+# import multiprocessing as mp
 import dgl
 
 from utils import *
@@ -69,26 +73,41 @@ class Dataloader(object):
         #     self.batch_size
         # )
         # p = Pool(self.num_workers)
+        queue_in, queue_out = (mp.Queue(self.num_workers * 3),
+                               mp.Queue(self.num_workers * 3))
 
-        for block in self.smiles_blocks:
-            # p = Pool(self.num_workers)
-            # ls_scaffold = p.map(
-            #     whole_graph_from_smiles,
-            #     block,
-            #     chunksize=1000
-            # )
+        def _worker_g():
+            for smiles_block_i in self.smiles_blocks:
+                queue_in.put(smiles_block_i)
+            for _ in range(self.num_workers):
+                queue_in.put(None)
 
-            ls_scaffold = Parallel(
-                n_jobs=self.num_workers,
-                backend='multiprocessing'
-            )(
-                delayed(whole_graph_from_smiles)
-                (
-                    i
-                )
-                for i in block
-            )
+        def _worker():
+            while True:
+                _block = queue_in.get()
+                if _block is None:
+                    break
+                results = []
+                for smiles_i in _block:
+                    result_i = whole_graph_from_smiles(smiles_i)
+                    results.append(result_i)
+                queue_out.put((results, _block))
+            queue_out.put(None)
 
+        t = Thread(target=_worker_g)
+        t.start()
+
+        pool = [mp.Process(target=_worker) for _ in range(self.num_workers)]
+        for p in pool:
+            p.start()
+
+        exit_workers = 0
+        while exit_workers < self.num_workers:
+            record = queue_out.get()
+            if record is None:
+                exit_workers += 1
+                continue
+            ls_scaffold, block = record
             ls_o_scaffold_clean = [
                 s_pair[0] for s_pair in ls_scaffold if s_pair[0] is not None
             ]

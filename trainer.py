@@ -57,7 +57,7 @@ def engine(
     # beta: float=0.25,
     grad_clip=3.0,
     num_epochs: int=5,
-    np=cpu_count()
+    np=1
 ):
     beta_step_len = (final_beta - init_beta) / num_annealing_steps
     model = GraphInf(
