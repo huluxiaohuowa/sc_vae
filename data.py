@@ -98,7 +98,8 @@ class Dataloader(object):
 
             yield (
                 dgl.batch(ls_o_scaffold_clean),
-                dgl.batch(ls_c_scaffold_clean)
+                dgl.batch(ls_c_scaffold_clean),
+                block
             )
 
         # for block in self.id_block:

@@ -109,4 +109,4 @@ datasets
 
 # datasets
 *.smi
-*.json
+sftp-config.json

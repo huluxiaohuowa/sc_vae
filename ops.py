@@ -2,20 +2,37 @@ import typing as t
 
 import torch
 from torch import nn
+from torch.nn import functional as F
 # from torch import functional as F
 from torch_sparse import spspmm
 import torch_scatter
+
+from mol_spec import *
 
 __all__ = [
     'loss_func',
     'spmmsp'
 ]
 
+ms = MoleculeSpec.get_default()
+
 
 def loss_func(recon_x, x, mu1, var1, mu2, var2, seg_ids):
+    num_atom_types = ms.num_atom_types
+    is_atom = x.lt(num_atom_types)
+    recon_x[is_atom, num_atom_types:] = - float('inf')
+    recon_x[~is_atom, :num_atom_types] = - float('inf')
+    recon_x = F.log_softmax(recon_x, dim=-1)
+
     seg_ids = seg_ids.to(mu1.device)
-    loss_recon = nn.CrossEntropyLoss().to(recon_x.device)
-    rec_loss = loss_recon(recon_x, x)
+    # loss_recon = nn.CrossEntropyLoss().to(recon_x.device)
+    # rec_loss = loss_recon(recon_x, x)
+    num_total_nodes = recon_x.size(0)
+    row_ids = torch.arange(num_total_nodes).long()
+    rec_loss = - recon_x[row_ids, x.long()]
+    rec_loss = torch_scatter.scatter_add(
+        rec_loss, seg_ids, dim=0
+    ).mean()
 
     # KLD_element = mu.pow(2).add_(logvar.exp()).mul_(-1).add_(1).add_(logvar)
     # KLD = torch.sum(KLD_element).mul_(-0.5)
