@@ -11,7 +11,8 @@ from mol_spec import *
 
 __all__ = [
     'loss_func',
-    'spmmsp'
+    'spmmsp',
+    'get_activation'
 ]
 
 ms = MoleculeSpec.get_default()

@@ -1,8 +1,7 @@
 import os.path as op
 from multiprocessing import cpu_count
-import typing as t
+# import typing as t
 from threading import Thread
-# import random
 
 # from joblib import Parallel, delayed
 import multiprocess as mp
@@ -94,8 +93,8 @@ class Dataloader(object):
                 queue_out.put((results, _block))
             queue_out.put(None)
 
-        t = Thread(target=_worker_g)
-        t.start()
+        thread = Thread(target=_worker_g)
+        thread.start()
 
         pool = [mp.Process(target=_worker) for _ in range(self.num_workers)]
         for p in pool:
