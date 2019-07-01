@@ -116,7 +116,7 @@ class GraphInf(nn.Module):
         feat_o: torch.Tensor,
         feat_c: torch.Tensor,
         adj: torch.sparse.FloatTensor,
-    ):
+    ) -> torch.Tensor:
         feat_o = self.embedding(feat_o)
         feat_c = self.c_embedding(feat_c)
         mu2, x_2 = self.c_encode(feat_c, adj)
@@ -125,3 +125,15 @@ class GraphInf(nn.Module):
         z = self.reparametrize(mu1, var1)
         x_recon = self.decode(z, adj)
         return x_recon, mu1, var1, mu2, var2
+
+    def inf(
+        self,
+        feat_c: torch.Tensor,
+        adj: torch.sparse.FloatTensor,
+    ) -> torch.Tensor:
+        feat_c = self.c_embedding(feat_c)
+        mu2, x_2 = self.c_encode(feat_c, adj)
+        var2 = self.softplus(x_2)
+        z = self.reparametrize(mu2, var2)
+        x_recon = self.decode(z, adj)
+        return x_recon
