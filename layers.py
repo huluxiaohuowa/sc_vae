@@ -118,10 +118,10 @@ class WeaveLayer(nn.Module):
         # adj = adj.to_sparse()
         # assert adj.is_sparse
         n_feat = self.linear(n_feat)
-        # n_feat_self = n_feat * n_feat
+        n_feat_self = n_feat * n_feat
         n_feat_adj = torch.mm(adj, n_feat)
 
-        return n_feat_adj
+        return n_feat_self + n_feat_adj
 
 
 class CasualWeave(nn.Module):

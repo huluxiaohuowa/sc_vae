@@ -137,3 +137,14 @@ class GraphInf(nn.Module):
         z = self.reparametrize(mu2, var2)
         x_recon = self.decode(z, adj)
         return x_recon
+
+    def reconstrcut(
+        self,
+        feat_o: torch.Tensor,
+        adj: torch.sparse.FloatTensor
+    ) -> torch.Tensor:
+        feat_o = self.embedding(feat_o)
+        mu1, x_1 = self.encode(feat_o, adj)
+        z = self.reparametrize(mu1, var1)
+        x_recon = self.decode(z, adj)
+        return x_recon
