@@ -66,10 +66,10 @@ class Dataloader(object):
         # ]
 
     def __len__(self):
-        assert (
-            get_num_lines(self.o_scaffolds) ==
-            get_num_lines(self.c_scaffolds)
-        )
+        # assert (
+        #     get_num_lines(self.o_scaffolds) ==
+        #     get_num_lines(self.c_scaffolds)
+        # )
         return self.num_id_block
 
     def __iter__(self):
@@ -241,7 +241,7 @@ class Dataloader(object):
         }
         for block in dic_mode[mode]:
             ls_scaffold = Parallel(
-                n_jobs=self.num_workers,
+                n_jobs=mp.cpu_count(),
                 backend='multiprocessing'
             )(
                 delayed(whole_graph_from_smiles)

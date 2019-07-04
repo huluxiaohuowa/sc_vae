@@ -7,6 +7,8 @@ import dgl
 from rdkit import Chem
 from rdkit.Chem import AllChem
 import torch
+import numpy
+from torch.nn import functional as F
 
 from mol_spec import *
 from ops import *
@@ -22,7 +24,10 @@ __all__ = [
     'graph_to_whole_graph',
     'get_remote_connection',
     'whole_graph_from_smiles',
-    'str_block_gen'
+    'str_block_gen',
+    'get_mol_from_array',
+    'get_mols_from_array',
+    'np_onehot_label'
 ]
 
 ms = MoleculeSpec.get_default()
@@ -165,6 +170,10 @@ def label_to_onehot(ls, class_num):
 
 def onehot_to_label(tensor):
     return torch.argmax(tensor, dim=1)
+
+
+def np_onehot_label(array):
+    return numpy.argmax(array, axis=-1)
 
 
 def str_from_line(
@@ -483,3 +492,111 @@ def whole_graph_from_smiles(
 #     return all_node_data, adj
 
 
+def get_mol_from_array(
+    array,
+    smiles,
+    sanitize=True,
+    to_smiles=False
+):
+    m = Chem.MolFromSmiles(smiles)
+    num_atoms = m.GetNumAtoms()
+    num_bonds = m.GetNumBonds()
+    atom_array = array[: num_atoms, :33]
+    bond_array = array[num_atoms: num_atoms + num_bonds, 33: 37]
+
+    atom_array = atom_array - atom_array.max(dim=-1, keepdim=True).values
+    bond_array = bond_array - bond_array.max(dim=-1, keepdim=True).values
+
+    atom_array_e = F.softmax(atom_array, dim=-1)
+    bond_array_e = F.softmax(bond_array, dim=-1)
+
+    atom_array_e[atom_array_e < 0] = 0
+    atom_array_e[atom_array_e != atom_array_e] = 1
+    bond_array_e[bond_array_e < 0] = 0
+    bond_array_e[bond_array_e != bond_array_e] = 1
+
+    mol = get_mol_from_clean_array(
+        atom_array_e,
+        bond_array_e,
+        smiles=smiles,
+        sanitize=sanitize,
+        to_smiles=to_smiles
+    )
+
+    return mol
+
+
+def get_mol_from_clean_array(
+    atom_array_e,
+    bond_array_e,
+    smiles,
+    sanitize=True,
+    to_smiles=True
+):
+    m = Chem.MolFromSmiles(smiles)
+
+    atom_indices = torch.multinomial(atom_array_e, 1).flatten().tolist()
+    bond_indices = torch.multinomial(bond_array_e, 1).flatten().tolist()
+
+    mol = Chem.RWMol(Chem.Mol())
+    for atom_idx in atom_indices:
+        mol.AddAtom(ms.index_to_atom(atom_idx))
+    for bond_idx, bond in zip(bond_indices, m.GetBonds()):
+        ms.index_to_bond(
+            mol,
+            bond.GetBeginAtomIdx(),
+            bond.GetEndAtomIdx(),
+            bond_idx
+        )
+    if sanitize:
+        try:
+            mol = mol.GetMol()
+            Chem.SanitizeMol(mol)
+            if to_smiles:
+                return Chem.MolToSmiles(mol)
+            else:
+                return mol
+        except:
+            return None
+    else:
+        return None
+
+
+def get_mols_from_array(
+    array: torch.Tensor,
+    smiles: str,
+    num_get: int,
+    sanitize: bool=True,
+    to_smiles: bool=False,
+):
+    m = Chem.MolFromSmiles(smiles)
+    num_atoms = m.GetNumAtoms()
+    num_bonds = m.GetNumBonds()
+    atom_array = array[: num_atoms, :33]
+    bond_array = array[num_atoms: num_atoms + num_bonds, 33: 37]
+
+    atom_array = atom_array - atom_array.max(dim=-1, keepdim=True).values
+    bond_array = bond_array - bond_array.max(dim=-1, keepdim=True).values
+
+    atom_array_e = F.softmax(atom_array, dim=-1)
+    bond_array_e = F.softmax(bond_array, dim=-1)
+
+    atom_array_e[atom_array_e < 0] = 0
+    atom_array_e[atom_array_e != atom_array_e] = 1
+    bond_array_e[bond_array_e < 0] = 0
+    bond_array_e[bond_array_e != bond_array_e] = 1
+
+    mols = []
+    while True:
+        mol = get_mol_from_clean_array(
+            atom_array_e,
+            bond_array_e,
+            smiles=smiles,
+            sanitize=sanitize,
+            to_smiles=to_smiles
+        )
+        if mol is not None:
+            mols.append(mol)
+        if len(mols) >= num_get:
+            break
+    return mols
