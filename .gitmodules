@@ -6,3 +6,6 @@
 	path = data-center
 	url = ssh://git@ddl.bjmu.edu.cn:15806/scaffold-network/data-center.git
     ignore = all
+[submodule "distrib_zoo.git"]
+	path = distrib_zoo
+	url = ssh://git@ddl.bjmu.edu.cn:15806/jach4/distrib_zoo.git
