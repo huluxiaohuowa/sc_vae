@@ -44,7 +44,7 @@ class Dataloader(object):
         )
         self.num_id_block = len(self.smiles_blocks)
 
-        self.num_train_blocks = self.num_id_block // 10 * 9
+        self.num_train_blocks = self.num_id_block // 10 * 8
         self.num_test_blocks = self.num_id_block - self.num_train_blocks
 
         self.train_blocks = self.smiles_blocks[:self.num_train_blocks]

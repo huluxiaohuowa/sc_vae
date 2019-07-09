@@ -19,7 +19,7 @@ ms = MoleculeSpec.get_default()
 def engine(
     config_id='naive3',
     device='cpu',
-    c_file='data-center/scaffolds_c.smi',
+    c_file='data-center/scaffolds_a.smi',
     scaffold_idx=4,
     model_idx=3,
     num_gen=5,

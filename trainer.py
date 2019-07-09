@@ -47,7 +47,7 @@ def engine(
     num_k_feat: int=24,
     num_dense_layers: int=20,
     num_out_feat: int=268,
-    num_z_feat: int=2,
+    num_z_feat: int=10,
     activation: str='elu',
     LR: float=1e-3,
     final_lr: float=0.1,
@@ -94,17 +94,17 @@ def engine(
         with SummaryWriter(events_loc) as writer:
             step = 0
             has_nan_or_inf = False
+            dataloader = Dataloader(
+                num_workers=np,
+                batch_size=batch_size
+            )
             for epoch in ipb(range(num_epochs), desc='epochs'):
                 if has_nan_or_inf:
                     break
-                dataloader = Dataloader(
-                    num_workers=np,
-                    batch_size=batch_size
-                )
                 for s, c, block in ipb(
-                    dataloader,
+                    dataloader.train,
                     desc="step",
-                    total=dataloader.num_id_block
+                    total=len(dataloader.train_blocks)
                 ):
                     beta = min(init_beta + beta_step_len * step, 1)
                     num_N = s.number_of_nodes()

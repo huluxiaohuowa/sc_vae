@@ -27,7 +27,7 @@ __all__ = [
     'str_block_gen',
     'get_mol_from_array',
     'get_mols_from_array',
-    'np_onehot_label'
+    # 'np_onehot_to_label'
 ]
 
 ms = MoleculeSpec.get_default()
@@ -169,11 +169,10 @@ def label_to_onehot(ls, class_num):
 
 
 def onehot_to_label(tensor):
-    return torch.argmax(tensor, dim=1)
-
-
-def np_onehot_label(array):
-    return numpy.argmax(array, axis=-1)
+    if isinstance(tensor, torch.Tensor):
+        return torch.argmax(tensor, dim=-1)
+    elif isinstance(tensor, numpy.ndarray):
+        return numpy.argmax(tensor, axis=-1)
 
 
 def str_from_line(
@@ -559,7 +558,7 @@ def get_mol_from_clean_array(
         except:
             return None
     else:
-        return None
+        return mol
 
 
 def get_mols_from_array(
