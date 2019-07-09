@@ -138,6 +138,14 @@ class WeaveMol(object):
         return d_indices_2, d_indices_3  # N_bond x 2
 
     @property
+    def remote_connection_2(self):
+        return self.remote_connections[0]
+
+    @property
+    def remote_connection_3(self):
+        return self.remote_connections[1]
+
+    @property
     def num_remote_connection_2(self):
         return self.remote_connections[0].shape[0]
 
@@ -290,4 +298,43 @@ class WeaveMol(object):
         return chain_assems_nodes
 
     @property
-    def 
+    def remote_connection_bonds(self):
+        num_new_nodes = len(self.new_nodes)
+        remote_nodes_2 = list(range(
+            num_new_nodes,
+            num_new_nodes + self.num_remote_connection_2
+        ))
+        remote_nodes_3 = list(range(
+            num_new_nodes + self.num_remote_connection_2,
+            num_new_nodes + self.num_remote_connection_2 +
+            self.num_remote_connection_3
+        ))
+        remote_bonds2 = np.concatenate([
+            np.concatenate([
+                self.remote_connection_2[:, 0].reshape([-1, 1]),
+                np.array(remote_nodes_2, dtype=np.int).reshape([-1, 1])
+            ], axis=-1),
+            np.concatenate([
+                np.array(remote_nodes_2, dtype=np.int).reshape([-1, 1]),
+                self.remote_connection_2[:, 1].reshape([-1, 1])
+            ], axis=-1)
+        ], axis=0)
+        remote_bonds3 = np.concatenate([
+            np.concatenate([
+                self.remote_connection_3[:, 0].reshape([-1, 1]),
+                np.array(remote_nodes_3, dtype=np.int).reshape([-1, 1])
+            ], axis=-1),
+            np.concatenate([
+                np.array(remote_nodes_3, dtype=np.int).reshape([-1, 1]),
+                self.remote_connection_3[:, 1].reshape([-1, 1])
+            ], axis=-1)
+        ], axis=0)
+        return remote_bonds2, remote_bonds3
+
+    @property
+    def remote_bonds_2(self):
+        return self.remote_connection_bonds[0]
+
+    @property
+    def remote_bonds_3(self):
+        return self.remote_connection_bonds[1]
