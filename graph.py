@@ -163,6 +163,10 @@ class WeaveMol(object):
         return [list(ring) for ring in rdmolops.GetSymmSSSR(self.mol)]
 
     @property
+    def num_original_rings(self) -> int:
+        return len(self.sssr)
+
+    @property
     def new_atoms(self):
         return (
             list(
@@ -338,3 +342,225 @@ class WeaveMol(object):
     @property
     def remote_bonds_3(self):
         return self.remote_connection_bonds[1]
+
+    @property
+    def chains_master_nodes(self):
+        num_above = (
+            self.num_atoms +
+            self.num_original_bonds +
+            self.num_remote_connection_2 +
+            self.num_remote_connection_3
+        )
+        chains_master_nodes = list(
+            range(
+                num_above, num_above + len(self.chain_assems)
+            )
+        )
+        return chains_master_nodes
+
+    @property
+    def num_chains_master_nodes(self):
+        return len(self.chains_master_nodes)
+
+    @property
+    def chains_master_edges(self):
+        num_atoms_each_chain = [len(chain) for chain in self.chain_assems]
+        master_nodes = np.repeat(
+            self.chains_master_nodes,
+            num_atoms_each_chain,
+            axis=0
+        )
+        all_chain_nodes = list(chain(*self.chain_assems))
+        chains_master_edges = np.stack(
+            [master_nodes, all_chain_nodes], axis=0
+        ).T
+        return chains_master_edges
+        # return master_nodes, all_chain_nodes
+
+        # for i, chain_assem in enumerate(self.chain_assems):
+        #     for j in chain_assem:
+        #         chains_master_edges.append([self.chains_master_nodes[i], j])
+        # chains_master_edges = np.stack(chains_master_edges, axis=0)
+        # return chains_master_edges
+
+    @property
+    def rings_master_nodes(self):
+        num_above = (
+            self.num_atoms +
+            self.num_original_bonds +
+            self.num_remote_connection_2 +
+            self.num_remote_connection_3 +
+            self.num_chains_master_nodes
+        )
+        rings_master_nodes = list(
+            range(
+                num_above, num_above + self.num_original_rings
+            )
+        )
+        return rings_master_nodes
+
+    @property
+    def num_rings_master_nodes(self):
+        return len(self.rings_master_nodes)
+
+    @property
+    def rings_master_edges(self):
+        # rings_master_edges = []
+        # for i, ring in enumerate(self.new_sssr):
+        #     for j in ring:
+        #         rings_master_edges.append([self.rings_master_nodes[i], j])
+        # rings_master_edges = np.stack(rings_master_edges, axis=0)
+        # return rings_master_edges
+        num_atoms_each_ring = [len(ring) for ring in self.new_sssr]
+        master_nodes = np.repeat(
+            self.rings_master_nodes,
+            num_atoms_each_ring,
+            axis=0
+        )
+        all_ring_nodes = list(chain(*self.new_sssr))
+        rings_master_edges = np.stack(
+            [master_nodes, all_ring_nodes], axis=0
+        ).T
+        return rings_master_edges
+
+    @property
+    def ringassems_master_nodes(self):
+        num_above = (
+            self.num_atoms +
+            self.num_original_bonds +
+            self.num_remote_connection_2 +
+            self.num_remote_connection_3 +
+            self.num_chains_master_nodes +
+            self.num_original_rings
+        )
+        ringassesm_master_nodes = list(
+            range(
+                num_above, num_above + self.num_ringassems_master_nodes
+            )
+        )
+        return ringassesm_master_nodes
+
+    @property
+    def num_ringassems_master_nodes(self):
+        return len(self.ring_assems)
+
+    @property
+    def node_ringassesm_idx_dic(self):
+        node_ringassesm_idx_dic = {}
+        for i, nodes in enumerate(self.ring_assems):
+            ring_dic = dict.fromkeys(nodes, i)
+            node_ringassesm_idx_dic.update(ring_dic)
+        return node_ringassesm_idx_dic
+
+    @property
+    def ringassems_master_edges(self):
+        ring_belong_to_ring_assems_idx = [
+            self.node_ringassesm_idx_dic[ring[0]] for ring in self.new_sssr
+        ]
+        master_nodes = np.array(self.ringassems_master_nodes, dtype=np.int)
+        master_nodes = master_nodes[ring_belong_to_ring_assems_idx]
+        ringassems_master_edges = np.stack(
+            [master_nodes, self.rings_master_nodes], axis=0
+        ).T
+        return ringassems_master_edges
+
+    @property
+    def mol_master_nodes(self):
+        num_above = (
+            self.num_atoms +
+            self.num_original_bonds +
+            self.num_remote_connection_2 +
+            self.num_remote_connection_3 +
+            self.num_chains_master_nodes +
+            self.num_original_rings +
+            self.num_ringassems_master_nodes
+        )
+        return [num_above]
+
+    @property
+    def mol_master_edges(self):
+        sub_level_nodes = (
+            self.chains_master_nodes + self.ringassems_master_nodes
+        )
+        master_nodes = np.repeat(
+            self.mol_master_nodes[0],
+            len(sub_level_nodes)
+        )
+        mol_master_edges = np.stack([master_nodes, sub_level_nodes], axis=0).T
+        return mol_master_edges
+
+    @property
+    def all_nodes_o(self):
+        all_nodes = np.concatenate(
+            [
+                self.atom_types,
+
+                self.original_bond_types + self.num_atom_types,
+
+                np.zeros(self.num_remote_connection_2, dtype=np.int) +
+                self.num_atom_types + self.num_bond_types,
+
+                np.zeros(self.num_remote_connection_3, dtype=np.int) +
+                self.num_atom_types + self.num_bond_types + 1,
+
+                np.zeros(self.num_chains_master_nodes, dtype=np.int) +
+                self.num_atom_types + self.num_bond_types + 2,
+
+                np.zeros(self.num_rings_master_nodes, dtype=np.int) +
+                self.num_atom_types + self.num_bond_types + 3,
+
+                np.zeros(self.num_ringassems_master_nodes, dtype=np.int) +
+                self.num_atom_types + self.num_bond_types + 4,
+
+                np.zeros(1, dtype=np.int) +
+                self.num_atom_types + self.num_bond_types + 5
+            ], axis=-1
+        )
+        return all_nodes
+
+    @property
+    def all_nodes_c(self):
+        all_nodes = np.concatenate(
+            [
+                self.atom_type_c,
+
+                self.original_bond_types_c + 1,
+
+                np.zeros(self.num_remote_connection_2, dtype=np.int) + 2,
+
+                np.zeros(self.num_remote_connection_3, dtype=np.int) + 3,
+
+                np.zeros(self.num_chains_master_nodes, dtype=np.int) + 4,
+
+                np.zeros(self.num_rings_master_nodes, dtype=np.int) + 5,
+
+                np.zeros(self.num_ringassems_master_nodes, dtype=np.int) + 6,
+
+                np.zeros(1, dtype=np.int) + 7
+            ], axis=-1
+        )
+        return all_nodes
+
+    @property
+    def all_edges(self):
+        all_edges_order = np.concatenate(
+            [
+                self.new_edge_info,
+                self.remote_bonds_2,
+                self.remote_bonds_3,
+                self.rings_master_edges,
+                self.chains_master_edges,
+                self.ringassems_master_edges,
+                self.mol_master_edges
+            ], axis=0
+        )
+        all_edges_flipped = np.flip(all_edges_order, axis=-1)
+        all_edges = np.concatenate(
+            [all_edges_order, all_edges_flipped],
+            axis=0
+        )
+        return all_edges
+
+    @property
+    def num_all_nodes(self):
+        return len(self.all_nodes_o)
