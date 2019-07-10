@@ -436,4 +436,3 @@ class SumPooling(_Pooling):
             activation=activation,
             pooling_op=torch_scatter.scatter_add
         )
-

@@ -8,7 +8,6 @@ from rdkit import Chem
 from rdkit.Chem import rdmolops
 from scipy import sparse
 
-from utils import *
 from mol_spec import MoleculeSpec
 
 
@@ -105,7 +104,12 @@ class WeaveMol(object):
 
     @property
     def original_adj(self):
-        indices = self.original_bond_info_np.repeat(2, 0)  # 2N_bonds x 2
+        indices1 = self.original_bond_info_np  # N_bonds x 2
+        indices2 = np.flip(indices1, axis=-1)
+        # indices = np.concatenate([indices1, indices2], axis=0)
+        indices = np.stack(
+            [indices1, indices2], axis=1
+        ).transpose(0, 2, 1).reshape(-1, 2)
         row, col, data = (
             indices[:, 0],
             indices[:, 1],
@@ -135,7 +139,10 @@ class WeaveMol(object):
         # remove diagonal elements
         d_indices_3 = d_indices_3[d_indices_3[:, 0] != d_indices_3[:, 1], :]
 
-        return d_indices_2, d_indices_3  # N_bond x 2
+        return (
+            d_indices_2[d_indices_2[:, 0] < d_indices_2[:, 1]],
+            d_indices_3[d_indices_3[:, 0] < d_indices_3[:, 1]]
+        )
 
     @property
     def remote_connection_2(self):
