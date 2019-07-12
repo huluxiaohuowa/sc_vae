@@ -20,9 +20,15 @@ ms = MoleculeSpec.get_default()
 
 def loss_func(recon_x, x, mu1, var1, mu2, var2, seg_ids):
     num_atom_types = ms.num_atom_types
+    num_bond_types = ms.num_bond_types
+
     is_atom = x.lt(num_atom_types)
+    is_bond = (~ is_atom) & x.lt(num_atom_types + num_bond_types)
+    is_virtual = x.ge(num_atom_types + num_bond_types)
+
     recon_x[is_atom, num_atom_types:] = - float('inf')
-    recon_x[~is_atom, :num_atom_types] = - float('inf')
+    recon_x[is_bond, :num_atom_types] = -float('inf')
+    recon_x[is_bond, (num_atom_types + num_bond_types):] = -float('inf')
     recon_x = F.log_softmax(recon_x, dim=-1)
 
     seg_ids = seg_ids.to(mu1.device)
@@ -31,6 +37,7 @@ def loss_func(recon_x, x, mu1, var1, mu2, var2, seg_ids):
     num_total_nodes = recon_x.size(0)
     row_ids = torch.arange(num_total_nodes).long()
     rec_loss = - recon_x[row_ids, x.long()]
+    rec_loss[is_virtual] = 0.0
     rec_loss = torch_scatter.scatter_add(
         rec_loss, seg_ids, dim=0
     ).mean()
