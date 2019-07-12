@@ -92,6 +92,11 @@ class WeaveLayer(nn.Module):
                 self.num_out_feat,
                 self.activation
             )
+            self.linear_self = BNReLULinear(
+                self.num_in_feat,
+                self.num_out_feat,
+                self.activation
+            )
             # self.elinear = BNReLULinear(
             #     self.in_features,
             #     self.num_out_feat,
@@ -100,6 +105,12 @@ class WeaveLayer(nn.Module):
 
         else:
             self.linear = nn.Linear(
+                self.num_in_feat,
+                self.num_out_feat,
+                self.activation
+            )
+
+            self.linear_self = nn.Linear(
                 self.num_in_feat,
                 self.num_out_feat,
                 self.activation
@@ -117,9 +128,10 @@ class WeaveLayer(nn.Module):
     ):
         # adj = adj.to_sparse()
         # assert adj.is_sparse
-        n_feat = self.linear(n_feat)
-        n_feat_self = n_feat * n_feat
-        n_feat_adj = torch.mm(adj, n_feat)
+        n_feat_adj = self.linear(n_feat)
+        n_feat_self = self.linear_self(n_feat)
+        # n_feat_self = n_feat * n_feat
+        n_feat_adj = torch.mm(adj, n_feat_adj)
 
         return n_feat_self + n_feat_adj
 

@@ -2,20 +2,24 @@ import os.path as op
 from multiprocessing import cpu_count
 # import typing as t
 from threading import Thread
+import abc
 
 from joblib import Parallel, delayed
 import multiprocess as mp
 # import multiprocessing as mp
 import dgl
+import numpy as np
 
 from utils import *
+from graph import *
 
 __all__ = [
     'Dataloader',
+    'ComLoader'
 ]
 
 
-class Dataloader(object):
+class Loader(object):
     def __init__(
         self,
         original_scaffolds_file: str=op.join(
@@ -49,21 +53,323 @@ class Dataloader(object):
 
         self.train_blocks = self.smiles_blocks[:self.num_train_blocks]
         self.test_blocks = self.smiles_blocks[self.num_train_blocks:]
-        # # self.shuffled_id = list(range(self.num_line))
-        # random.shuffle(self.shuffled_id)
-        # self.num_id_block = (
-        #     self.num_line // self.batch_size if
-        #     self.num_line % self.batch_size == 0 else
-        #     self.num_line // self.batch_size + 1
-        # )
-        # self.id_block = [
-        #     self.shuffled_id[
-        #         i * self.batch_size:min(
-        #             (i + 1) * self.batch_size, self.num_line
-        #         )
-        #     ]
-        #     for i in range(self.num_id_block)
-        # ]
+
+    @abc.abstractmethod
+    def __iter__(self):
+        raise NotImplementedError
+
+    @property
+    @abc.abstractmethod
+    def train(self):
+        raise NotImplementedError
+
+    @property
+    @abc.abstractmethod
+    def test(self):
+        raise NotImplementedError
+
+
+class ComLoader(Loader):
+    def __init__(self, **kargs):
+        super(ComLoader, self).__init__(**kargs)
+
+    def __len__():
+        return self.num_id_block
+
+    def __iter__(self):
+        queue_in, queue_out = (
+            mp.Queue(self.num_workers * 3),
+            mp.Queue(self.num_workers * 3)
+        )
+
+        def _worker_g():
+            for smiles_block_i in self.smiles_blocks:
+                queue_in.put(smiles_block_i)
+            for _ in range(self.num_workers):
+                queue_in.put(None)
+
+        def _workder():
+            while True:
+                _block = queue_in.get()
+                if _block is None:
+                    break
+                nums_nodes = []
+                nums_edges = []
+                bond_infos = []
+                nodes_os = []
+                nodes_cs = []
+                for smiles_i in _block:
+                    try:
+                        weave_mol = WeaveMol(smiles_i)
+                        num_nodes = weave_mol.num_all_nodes
+                        num_edges = weave_mol.num_all_edges
+                        all_edges = weave_mol.all_edges
+                        all_nodes_o = weave_mol.all_nodes_o
+                        all_nodes_c = weave_mol.all_nodes_c
+
+                        nums_nodes.append(num_nodes)
+                        nums_edges.append(num_edges)
+                        bond_infos.append(all_edges)
+                        nodes_os.append(all_nodes_o)
+                        nodes_cs.append(all_nodes_c)
+                    except:
+                        pass
+                queue_out.put((
+                    _block,
+                    nums_nodes,
+                    nums_edges,
+                    bond_infos,
+                    nodes_os,
+                    nodes_cs
+                ))
+            queue_out.put(None)
+
+        thread = Thread(target=_worker_g)
+        thread.start()
+
+        pool = [mp.Process(target=_workder) for _ in range(self.num_workers)]
+        for p in pool:
+            p.start()
+
+        exit_workers = 0
+        while exit_workers < self.num_workers:
+            record = queue_out.get()
+            if record is None:
+                exit_workers += 1
+                continue
+            (
+                block,
+                nums_nodes,
+                nums_edges,
+                bond_infos,
+                nodes_os,
+                nodes_cs
+            ) = record
+
+            seg_ids = np.arange(len(nums_nodes)).repeat(nums_nodes)
+
+            bond_info = np.concatenate(bond_infos, axis=0)
+            shift_values = np.pad(
+                np.cumsum(nums_nodes),
+                1,
+                'constant',
+                constant_values=0
+            )[: -2].repeat(nums_edges).reshape([-1, 1])
+
+            bond_info_all = bond_info + shift_values
+
+            nodes_o = np.concatenate(nodes_os, axis=-1)
+            nodes_c = np.concatenate(nodes_cs, axis=-1)
+
+            yield (
+                block,
+                nums_nodes,
+                nums_edges,
+                seg_ids,
+                bond_info_all,
+                nodes_o,
+                nodes_c
+            )
+
+    @property
+    def train(self):
+        queue_in, queue_out = (
+            mp.Queue(self.num_workers * 3),
+            mp.Queue(self.num_workers * 3)
+        )
+
+        def _worker_g():
+            for smiles_block_i in self.train_blocks:
+                queue_in.put(smiles_block_i)
+            for _ in range(self.num_workers):
+                queue_in.put(None)
+
+        def _workder():
+            while True:
+                _block = queue_in.get()
+                if _block is None:
+                    break
+                nums_nodes = []
+                nums_edges = []
+                bond_infos = []
+                nodes_os = []
+                nodes_cs = []
+                for smiles_i in _block:
+                    try:
+                        weave_mol = WeaveMol(smiles_i)
+                        num_nodes = weave_mol.num_all_nodes
+                        num_edges = weave_mol.num_all_edges
+                        all_edges = weave_mol.all_edges
+                        all_nodes_o = weave_mol.all_nodes_o
+                        all_nodes_c = weave_mol.all_nodes_c
+
+                        nums_nodes.append(num_nodes)
+                        nums_edges.append(num_edges)
+                        bond_infos.append(all_edges)
+                        nodes_os.append(all_nodes_o)
+                        nodes_cs.append(all_nodes_c)
+                    except:
+                        pass
+                queue_out.put((
+                    _block,
+                    nums_nodes,
+                    nums_edges,
+                    bond_infos,
+                    nodes_os,
+                    nodes_cs
+                ))
+            queue_out.put(None)
+
+        thread = Thread(target=_worker_g)
+        thread.start()
+
+        pool = [mp.Process(target=_workder) for _ in range(self.num_workers)]
+        for p in pool:
+            p.start()
+
+        exit_workers = 0
+        while exit_workers < self.num_workers:
+            record = queue_out.get()
+            if record is None:
+                exit_workers += 1
+                continue
+            (
+                block,
+                nums_nodes,
+                nums_edges,
+                bond_infos,
+                nodes_os,
+                nodes_cs
+            ) = record
+
+            seg_ids = np.arange(len(nums_nodes)).repeat(nums_nodes)
+
+            bond_info = np.concatenate(bond_infos, axis=0)
+            shift_values = np.pad(
+                np.cumsum(nums_nodes),
+                1,
+                'constant',
+                constant_values=0
+            )[: -2].repeat(nums_edges).reshape([-1, 1])
+
+            bond_info_all = bond_info + shift_values
+
+            nodes_o = np.concatenate(nodes_os, axis=-1)
+            nodes_c = np.concatenate(nodes_cs, axis=-1)
+
+            yield (
+                block,
+                nums_nodes,
+                nums_edges,
+                seg_ids,
+                bond_info_all,
+                nodes_o,
+                nodes_c
+            )
+
+    @property
+    def test(self):
+        queue_in, queue_out = (
+            mp.Queue(self.num_workers * 3),
+            mp.Queue(self.num_workers * 3)
+        )
+
+        def _worker_g():
+            for smiles_block_i in self.test_blocks:
+                queue_in.put(smiles_block_i)
+            for _ in range(self.num_workers):
+                queue_in.put(None)
+
+        def _workder():
+            while True:
+                _block = queue_in.get()
+                if _block is None:
+                    break
+                nums_nodes = []
+                nums_edges = []
+                bond_infos = []
+                nodes_os = []
+                nodes_cs = []
+                for smiles_i in _block:
+                    try:
+                        weave_mol = WeaveMol(smiles_i)
+                        num_nodes = weave_mol.num_all_nodes
+                        num_edges = weave_mol.num_all_edges
+                        all_edges = weave_mol.all_edges
+                        all_nodes_o = weave_mol.all_nodes_o
+                        all_nodes_c = weave_mol.all_nodes_c
+
+                        nums_nodes.append(num_nodes)
+                        nums_edges.append(num_edges)
+                        bond_infos.append(all_edges)
+                        nodes_os.append(all_nodes_o)
+                        nodes_cs.append(all_nodes_c)
+                    except:
+                        pass
+                queue_out.put((
+                    _block,
+                    nums_nodes,
+                    nums_edges,
+                    bond_infos,
+                    nodes_os,
+                    nodes_cs
+                ))
+            queue_out.put(None)
+
+        thread = Thread(target=_worker_g)
+        thread.start()
+
+        pool = [mp.Process(target=_workder) for _ in range(self.num_workers)]
+        for p in pool:
+            p.start()
+
+        exit_workers = 0
+        while exit_workers < self.num_workers:
+            record = queue_out.get()
+            if record is None:
+                exit_workers += 1
+                continue
+            (
+                block,
+                nums_nodes,
+                nums_edges,
+                bond_infos,
+                nodes_os,
+                nodes_cs
+            ) = record
+
+            seg_ids = np.arange(len(nums_nodes)).repeat(nums_nodes)
+
+            bond_info = np.concatenate(bond_infos, axis=0)
+            shift_values = np.pad(
+                np.cumsum(nums_nodes),
+                1,
+                'constant',
+                constant_values=0
+            )[: -2].repeat(nums_edges).reshape([-1, 1])
+
+            bond_info_all = bond_info + shift_values
+
+            nodes_o = np.concatenate(nodes_os, axis=-1)
+            nodes_c = np.concatenate(nodes_cs, axis=-1)
+
+            yield (
+                block,
+                nums_nodes,
+                nums_edges,
+                seg_ids,
+                bond_info_all,
+                nodes_o,
+                nodes_c
+            )
+
+
+class Dataloader(Loader):
+    def __init__(
+        self,
+        **kargs
+    ):
+        super(Dataloader, self).__init__(**kargs)
 
     def __len__(self):
         # assert (
@@ -263,40 +569,3 @@ class Dataloader(object):
                 dgl.batch(ls_c_scaffold_clean),
                 block
             )
-
-
-
-        # for block in self.id_block:
-        #     ls_o_scaffold = Parallel(
-        #         n_jobs=self.num_workers,
-        #         backend='multiprocessing'
-        #     )(
-        #         delayed(whole_graph_from_line)
-        #         (
-        #             self.o_scaffolds,
-        #             i
-        #         )
-        #         for i in block
-        #     )
-
-        #     ls_c_scaffold = Parallel(
-        #         n_jobs=self.num_workers,
-        #         backend='multiprocessing'
-        #     )(
-        #         delayed(whole_graph_from_line)
-        #         (
-        #             self.o_scaffolds,
-        #             i,
-        #             True
-        #         )
-        #         for i in block
-        #     )
-
-        #     ls_o_scaffold_clean = [_ for _ in ls_o_scaffold if _ is not None]
-        #     ls_c_scaffold_clean = [_ for _ in ls_c_scaffold if _ is not None]
-
-        #     yield (
-        #         dgl.batch(ls_o_scaffold_clean),
-        #         dgl.batch(ls_c_scaffold_clean)
-        #     )
-            # yield block
