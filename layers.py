@@ -2,6 +2,7 @@ import typing as t
 
 import torch
 from torch import nn
+from torch.autograd import Function
 import torch_scatter
 from torch.utils import checkpoint as tuc
 
@@ -67,6 +68,59 @@ class BNReLULinear(nn.Module):
         return self.bn_relu_linear(x)
 
 
+class SelectAdd(Function):
+    """
+    Implement the memory efficient version of `a + b.index_select(indices)`
+    """
+
+    def __init__(self,
+                 indices: torch.Tensor,
+                 indices_a: torch.Tensor = None):
+        """
+        Initializer
+
+        Args:
+            indices (torch.Tensor): The indices to select the object `b`
+            indices_a (torch.Tensor or None):
+                The indices to select the object `a`. Default to None
+        """
+        self._indices = indices
+        self._indices_a = indices_a
+
+    def forward(self, a: torch.Tensor, b: torch.Tensor) -> torch.Tensor:
+        """
+        The forward pass
+
+        Args:
+            a (torch.Tensor)
+            b (torch.Tensor): The input tensors
+
+        Returns:
+            torch.Tensor:
+                The output tensor
+        """
+        if self._indices_a is not None:
+            return (a.index_select(dim=0, index=self._indices_a) +
+                    b.index_select(dim=0, index=self._indices))
+        else:
+            return a + b.index_select(dim=0, index=self._indices)
+
+    def backward(self, grad_output):
+        # For the input a
+        if self._indices_a is not None:
+            grad_a = torch_scatter.scatter_add(grad_output,
+                                               index=self._indices_a,
+                                               dim=0)
+        else:
+            # If a is not index selected, simply clone the gradient
+            grad_a = grad_output.clone()
+        # For the input b, perform a segment sum
+        grad_b = torch_scatter.scatter_add(grad_output,
+                                           index=self._indices,
+                                           dim=0)
+        return grad_a, grad_b
+
+
 class WeaveLayer(nn.Module):
     def __init__(
         self,
@@ -77,6 +131,7 @@ class WeaveLayer(nn.Module):
         num_in_feat: int,
         num_out_feat: int,
         activation: str='relu',
+        is_first_layer: bool=False
     ):
         super().__init__()
         # self.num_v_in_feat = num_v_in_feat
@@ -86,55 +141,61 @@ class WeaveLayer(nn.Module):
         self.num_in_feat = num_in_feat
         self.num_out_feat = num_out_feat
         self.activation = activation
-        if self.activation is not None:
-            self.linear = BNReLULinear(
-                self.num_in_feat,
-                self.num_out_feat,
-                self.activation
-            )
-            self.linear_self = BNReLULinear(
-                self.num_in_feat,
-                self.num_out_feat,
-                self.activation
-            )
-            # self.elinear = BNReLULinear(
-            #     self.in_features,
-            #     self.num_out_feat,
-            #     self.activation
-            # )
-
+        # Broadcasting node features to edges
+        if is_first_layer:
+            self.broadcast = nn.Linear(self.num_in_feat,
+                                       self.num_out_feat * 5)
         else:
-            self.linear = nn.Linear(
-                self.num_in_feat,
-                self.num_out_feat,
-                self.activation
-            )
+            self.broadcast = BNReLULinear(self.num_in_feat,
+                                          self.num_out_feat * 5,
+                                          self.activation)
+        # Gather edge features to node
+        self.gather = nn.Sequential(nn.BatchNorm1d(self.num_out_feat),
+                                    ops.get_activation(self.activation,
+                                                       inplace=True))
 
-            self.linear_self = nn.Linear(
-                self.num_in_feat,
-                self.num_out_feat,
-                self.activation
-            )
-            # self.elinear = nn.Linear(
-            #     self.num_in_feat,
-            #     self.num_out_feat,* self.num_bond_types,
-            #     self.activation
-            # )
+        # Update node features
+        self.update = BNReLULinear(self.num_out_feat * 2,
+                                   self.num_out_feat,
+                                   self.activation)
 
     def forward(
         self,
         n_feat: torch.Tensor,
         adj: torch.Tensor
     ):
-        # adj = adj.to_sparse()
-        # assert adj.is_sparse
-        n_feat_adj = self.linear(n_feat)
-        n_feat_self = self.linear_self(n_feat)
-        # n_feat_self = n_feat * n_feat
-        n_feat_adj = torch.mm(adj, n_feat_adj)
-
-        return n_feat_self + n_feat_adj
-
+        node_broadcast = self.broadcast(n_feat)
+        (self_features,
+         begin_features_sum,
+         end_features_sum,
+         begin_features_max,
+         end_features_max) = torch.split(node_broadcast,
+                                         self.num_out_feat,
+                                         dim=-1)
+        edge_info = adj._indices()
+        begin_ids, end_ids = edge_info[0, :], edge_info[1, :]
+        edge_features_max = SelectAdd(begin_ids,
+                                      end_ids)(begin_features_max,
+                                               end_features_max)
+        edge_features_sum = SelectAdd(begin_ids,
+                                      end_ids)(begin_features_sum,
+                                               end_features_sum)
+        edge_gathered_sum = self.gather(edge_features_sum)
+        edge_gathered_sum = torch_scatter.scatter_add(edge_gathered_sum,
+                                                      begin_ids,
+                                                      dim=0)
+        max_val = edge_features_max.max()
+        edge_gathered_max = edge_features_max + max_val
+        edge_gathered_max = torch_scatter.scatter_max(edge_gathered_max,
+                                                      begin_ids,
+                                                      dim=0)
+        edge_gathered_max = edge_gathered_max - max_val
+        edge_gathered = torch.cat([edge_gathered_max,
+                                   edge_gathered_sum],
+                                  dim=-1)
+        node_update = self.update(edge_gathered)
+        outputs = self_features + node_update
+        return outputs
 
 class CasualWeave(nn.Module):
     def __init__(
@@ -300,7 +361,7 @@ class DenseNet(nn.Module):
 #         activation: str='elu',
 #     ):
 #         """Summary
-        
+
 #         Args:
 #             in_features (int): Description
 #             out_features (int): Description
@@ -334,7 +395,7 @@ class DenseNet(nn.Module):
 #         atom_features = self.linear(atom_features)
 #         # size: batch_size x num_bond_types x out_features
 #         atom_features = atom_features.view(
-#             -1, 
+#             -1,
 #             self.num_bond_types,
 #             self.out_features
 #         ).transpose(
@@ -346,7 +407,7 @@ class DenseNet(nn.Module):
 #         )  # size num_bond_types*batch_size x out_features
 #         out = torch.sparse.mm(adj, atom_features)
 #         return out  # size: batch_size x out_features
-        
+
 #     def __repr__(self):
 #         return (
 #             self.__class__.__name__ + ' (' +
