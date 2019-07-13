@@ -184,18 +184,19 @@ class WeaveLayer(nn.Module):
         edge_gathered_sum = torch_scatter.scatter_add(edge_gathered_sum,
                                                       begin_ids,
                                                       dim=0)
-        max_val = edge_features_max.max()
-        edge_gathered_max = edge_features_max + max_val
+        min_val = edge_features_max.min()
+        edge_gathered_max = edge_features_max + min_val
         edge_gathered_max = torch_scatter.scatter_max(edge_gathered_max,
                                                       begin_ids,
-                                                      dim=0)
-        edge_gathered_max = edge_gathered_max - max_val
+                                                      dim=0)[0]
+        edge_gathered_max = edge_gathered_max - min_val
         edge_gathered = torch.cat([edge_gathered_max,
                                    edge_gathered_sum],
                                   dim=-1)
         node_update = self.update(edge_gathered)
         outputs = self_features + node_update
         return outputs
+
 
 class CasualWeave(nn.Module):
     def __init__(
@@ -222,7 +223,8 @@ class CasualWeave(nn.Module):
                     WeaveLayer(
                         in_feat,
                         out_feat,
-                        None
+                        self.activation,
+                        True
                     )
                 )
             else:
