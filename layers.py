@@ -174,22 +174,22 @@ class WeaveLayer(nn.Module):
                                          dim=-1)
         edge_info = adj._indices()
         begin_ids, end_ids = edge_info[0, :], edge_info[1, :]
-        edge_features_max = SelectAdd(begin_ids,
-                                      end_ids)(begin_features_max,
-                                               end_features_max)
-        edge_features_sum = SelectAdd(begin_ids,
-                                      end_ids)(begin_features_sum,
-                                               end_features_sum)
+        edge_features_max = SelectAdd(end_ids,
+                                      begin_ids)(begin_features_max,
+                                                 end_features_max)
+        edge_features_sum = SelectAdd(end_ids,
+                                      begin_ids)(begin_features_sum,
+                                                 end_features_sum)
         edge_gathered_sum = self.gather(edge_features_sum)
         edge_gathered_sum = torch_scatter.scatter_add(edge_gathered_sum,
                                                       begin_ids,
                                                       dim=0)
         min_val = edge_features_max.min()
-        edge_gathered_max = edge_features_max + min_val
+        edge_gathered_max = edge_features_max - min_val
         edge_gathered_max = torch_scatter.scatter_max(edge_gathered_max,
                                                       begin_ids,
                                                       dim=0)[0]
-        edge_gathered_max = edge_gathered_max - min_val
+        edge_gathered_max = edge_gathered_max + min_val
         edge_gathered = torch.cat([edge_gathered_max,
                                    edge_gathered_sum],
                                   dim=-1)
