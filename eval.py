@@ -52,7 +52,7 @@ def engine(
         for batch in ipb(
             dataloader.test,
             desc="step",
-            total=dataloader.num_train_blocks
+            total=dataloader.num_test_blocks
         ):
             (
                 block,

@@ -1,4 +1,5 @@
 {
     "model_idx": 4,
-    "device_id": 2
+    "device_id": 2,
+    "batch_size": 128
 }

@@ -3,6 +3,7 @@ from multiprocessing import cpu_count
 # import typing as t
 from threading import Thread
 import abc
+import pickle
 
 from joblib import Parallel, delayed
 import multiprocess as mp
