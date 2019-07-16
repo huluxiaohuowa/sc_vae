@@ -99,8 +99,10 @@ def engine(
                 batch_size=batch_size
             )
             for epoch in ipb(range(num_epochs), desc='epochs'):
+
                 if has_nan_or_inf:
                     break
+
                 for s, c, block in ipb(
                     dataloader.train,
                     desc="step",

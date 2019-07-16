@@ -136,7 +136,7 @@ class GraphInf(nn.Module):
         var2 = self.softplus(x_2)
         z = self.reparametrize(mu2, var2)
         x_recon = self.decode(z, adj)
-        return x_recon
+        return x_recon, mu2, var2
 
     def reconstrcut(
         self,
@@ -148,4 +148,4 @@ class GraphInf(nn.Module):
         var1 = self.softplus(x_1)
         z = self.reparametrize(mu1, var1)
         x_recon = self.decode(z, adj)
-        return x_recon
+        return x_recon, mu1, var1

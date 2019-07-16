@@ -57,7 +57,7 @@ def engine(
     # beta: float=0.25,
     grad_clip=3.0,
     num_epochs: int=5,
-    np=1
+    num_p=1
 ):
     beta_step_len = (final_beta - init_beta) / num_annealing_steps
     model = GraphInf(
@@ -94,129 +94,151 @@ def engine(
         with SummaryWriter(events_loc) as writer:
             step = 0
             has_nan_or_inf = False
-            dataloader = ComLoader(
-                num_workers=np,
-                batch_size=batch_size
+            train_loader = iter(
+                ComLoader(
+                    original_scaffolds_file='data-center/train.smi',
+                    num_workers=num_p,
+                    batch_size=batch_size
+                )
             )
+            test_loader = iter(
+                ComLoader(
+                    original_scaffolds_file='data-center/train.smi',
+                    num_workers=num_p,
+                    batch_size=batch_size
+                )
+            )
+
             for epoch in ipb(range(num_epochs), desc='epochs'):
-                if has_nan_or_inf:
-                    break
-                for batch in ipb(
-                    dataloader.train,
-                    desc="step",
-                    total=dataloader.num_train_blocks
-                ):
-                    (
-                        block,
-                        nums_nodes,
-                        nums_edges,
-                        seg_ids,
-                        bond_info_all,
-                        nodes_o,
-                        nodes_c
-                    ) = batch
-
-                    beta = min(init_beta + beta_step_len * step, 1)
-                    num_N = sum(nums_nodes)
-                    num_E = sum(nums_edges)
-
-                    # adj = s.adjacency_matrix().coalesce()
-
-                    # indices = torch.cat(
-                    #     [adj.indices(), torch.arange(0, num_N).repeat(2, 1)],
-                    #     dim=-1
-                    # )
-
-                    values = torch.ones(num_E)
-
-                    s_adj = torch.sparse_coo_tensor(
-                        bond_info_all.T,
-                        values,
-                        torch.Size([num_N, num_N])
-                    ).to(device)
-
-                    s_nfeat = torch.from_numpy(nodes_o).to(device)
-                    c_nfeat = torch.from_numpy(nodes_c).to(device)
-
-                    x_recon, mu1, logvar1, mu2, logvar2 = (
-                        model(s_nfeat, c_nfeat, s_adj)
-                    )
-                    seg_ids = torch.from_numpy(seg_ids)
-                    optim.zero_grad()
-                    MSE, KL = loss_func(
-                        x_recon, s_nfeat, mu1, logvar1, mu2, logvar2, seg_ids
-                    )
-
-                    loss = MSE + beta * KL
-                    loss.backward()
-
-                    # debug for Nan in recon loss
-                    has_nan_or_inf = torch.cat(
-                        [
-                            torch.stack(
-                                (
-                                    torch.isnan(params.grad).any(),
-                                    torch.isinf(params.grad).any()
-                                ),
-                                dim=-1
-                            ) for params in model.parameters()
-                        ],
-                        dim=-1
-                    ).any()
+                try:
                     if has_nan_or_inf:
-                        torch.save(
-                            model,
-                            path.join(save_loc, f'broken_{epoch}.ckpt')
-                        )
-                        torch.save(
-                            s_nfeat,
-                            path.join(save_loc, f's_nfeat_{epoch}.pt')
-                        )
-                        torch.save(
-                            c_nfeat,
-                            path.join(save_loc, f'c_nfeat_{epoch}.pt')
-                        )
-                        torch.save(
-                            s_adj.to_dense(),
-                            path.join(save_loc, f's_adj_{epoch}.pt')
-                        )
-                        torch.save(
-                            seg_ids,
-                            path.join(save_loc, f'seg_ids_{epoch}.pt')
-                        )
-                        with open(path.join(save_loc, 'batch.smi'), 'w') as f:
-                            for smiles in block:
-                                f.write(smiles + '\n')
-
                         break
 
-                    torch.nn.utils.clip_grad_norm_(
-                        model.parameters(),
-                        grad_clip
-                    )
+                    for i in ipb(range(len(
+                        train_loader.num_id_block +
+                        train_loader.num_id_block // 200
+                    ))):
+                        if step % 200 != 0:
+                            batch = next(train_loader)
+                        else:
+                            batch = next(test_loader)
 
-                    optim.step()
-                    writer.add_scalar(
-                        f'loss',
-                        loss.cpu().item(),
-                        step
+                        (
+                            block,
+                            nums_nodes,
+                            nums_edges,
+                            seg_ids,
+                            bond_info_all,
+                            nodes_o,
+                            nodes_c
+                        ) = batch
+
+                        beta = min(init_beta + beta_step_len * step, 1)
+                        num_N = sum(nums_nodes)
+                        num_E = sum(nums_edges)
+
+                        values = torch.ones(num_E)
+
+                        s_adj = torch.sparse_coo_tensor(
+                            bond_info_all.T,
+                            values,
+                            torch.Size([num_N, num_N])
+                        ).to(device)
+
+                        s_nfeat = torch.from_numpy(nodes_o).to(device)
+                        c_nfeat = torch.from_numpy(nodes_c).to(device)
+
+                        x_recon, mu1, logvar1, mu2, logvar2 = (
+                            model(s_nfeat, c_nfeat, s_adj)
+                        )
+                        seg_ids = torch.from_numpy(seg_ids)
+                        optim.zero_grad()
+                        MSE, KL = loss_func(
+                            x_recon,
+                            s_nfeat,
+                            mu1,
+                            logvar1,
+                            mu2,
+                            logvar2,
+                            seg_ids
+                        )
+
+                        loss = MSE + beta * KL
+                        if step % 200 != 0:
+                            loss.backward()
+                            optim.step()
+
+                        # debug for Nan in recon loss
+                        has_nan_or_inf = torch.cat(
+                            [
+                                torch.stack(
+                                    (
+                                        torch.isnan(params.grad).any(),
+                                        torch.isinf(params.grad).any()
+                                    ),
+                                    dim=-1
+                                ) for params in model.parameters()
+                            ],
+                            dim=-1
+                        ).any()
+                        if has_nan_or_inf:
+                            torch.save(
+                                model,
+                                path.join(save_loc, f'broken_{epoch}.ckpt')
+                            )
+                            torch.save(
+                                s_nfeat,
+                                path.join(save_loc, f's_nfeat_{epoch}.pt')
+                            )
+                            torch.save(
+                                c_nfeat,
+                                path.join(save_loc, f'c_nfeat_{epoch}.pt')
+                            )
+                            torch.save(
+                                s_adj.to_dense(),
+                                path.join(save_loc, f's_adj_{epoch}.pt')
+                            )
+                            torch.save(
+                                seg_ids,
+                                path.join(save_loc, f'seg_ids_{epoch}.pt')
+                            )
+                            with open(
+                                path.join(save_loc, 'batch.smi'), 'w'
+                            ) as f:
+                                for smiles in block:
+                                    f.write(smiles + '\n')
+
+                            break
+
+                        torch.nn.utils.clip_grad_norm_(
+                            model.parameters(),
+                            grad_clip
+                        )
+
+                        writer.add_scalar(
+                            f'loss',
+                            loss.cpu().item(),
+                            step
+                        )
+                        writer.add_scalar(
+                            f'recon_loss',
+                            MSE.cpu().item(),
+                            step
+                        )
+                        writer.add_scalar(
+                            f'KL',
+                            KL.cpu().item(),
+                            step
+                        )
+                        step += 1
+                        # print(loss.item(), MSE.item(), KL.item())
+                    torch.save(
+                        model,
+                        path.join(save_loc, f'model_{epoch}.ckpt')
                     )
-                    writer.add_scalar(
-                        f'recon_loss',
-                        MSE.cpu().item(),
-                        step
-                    )
-                    writer.add_scalar(
-                        f'KL',
-                        KL.cpu().item(),
-                        step
-                    )
-                    step += 1
-                    # print(loss.item(), MSE.item(), KL.item())
-                torch.save(
-                    model,
-                    path.join(save_loc, f'model_{epoch}.ckpt')
-                )
+                except StopIteration:
+                    continue
+
     except KeyboardInterrupt:
         torch.save(
             model,

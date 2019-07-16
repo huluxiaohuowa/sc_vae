@@ -24,7 +24,7 @@ def engine(
     config_id='naive3',
     device_id=2,
     model_idx=4,
-    scaffolds_file='data-center/scaffolds_a.smi',
+    scaffolds_file='data-center/test.smi',
     batch_size=500,
     np=mp.cpu_count(),
 ):
@@ -50,9 +50,9 @@ def engine(
 
     with open(f'eval_configs/{config_id}_records.txt', 'w') as f:
         for batch in ipb(
-            dataloader.test,
+            dataloader,
             desc="step",
-            total=dataloader.num_test_blocks
+            total=dataloader.num_id_block
         ):
             (
                 block,
