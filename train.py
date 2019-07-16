@@ -1,9 +1,7 @@
-# import time
 import sys
 import json
 from os import path, makedirs
 import typing as t
-from multiprocessing import cpu_count
 
 from ipypb import ipb
 import torch
@@ -15,25 +13,6 @@ from data import *
 from utils import *
 from ops import *
 from networks import *
-
-# device_id = 1
-# device = torch.device(f'cuda:{device_id}')
-# batch_size = 128
-
-# use_cuda = True
-# num_embeddings = 8
-# casual_hidden_sizes = [16, 32]
-# num_botnec_feat = 72
-# num_k_feat = 24
-# num_dense_layers = 20
-# num_out_feat = 256
-# num_z_feat = 2
-# activation = 'elu'
-# LR = 1e-3
-# final_lr = 0.1
-# beta = 1.
-
-# num_epochs = 10
 
 
 def engine(
@@ -94,34 +73,32 @@ def engine(
         with SummaryWriter(events_loc) as writer:
             step = 0
             has_nan_or_inf = False
-            train_loader = iter(
-                ComLoader(
-                    original_scaffolds_file='data-center/train.smi',
-                    num_workers=num_p,
-                    batch_size=batch_size
-                )
+            train_loader = ComLoader(
+                original_scaffolds_file='data-center/train.smi',
+                num_workers=num_p,
+                batch_size=batch_size
             )
-            test_loader = iter(
-                ComLoader(
-                    original_scaffolds_file='data-center/train.smi',
-                    num_workers=num_p,
-                    batch_size=batch_size
-                )
+            iter_train = iter(train_loader)
+            test_loader = ComLoader(
+                original_scaffolds_file='data-center/train.smi',
+                num_workers=num_p,
+                batch_size=batch_size
             )
+            iter_test = iter(test_loader)
 
             for epoch in ipb(range(num_epochs), desc='epochs'):
                 try:
                     if has_nan_or_inf:
                         break
 
-                    for i in ipb(range(len(
+                    for i in ipb(range(
                         train_loader.num_id_block +
                         train_loader.num_id_block // 200
-                    ))):
-                        if step % 200 != 0:
-                            batch = next(train_loader)
+                    )):
+                        if step > 0 and step % 200 == 0:
+                            batch = next(iter_test)
                         else:
-                            batch = next(test_loader)
+                            batch = next(iter_train)
 
                         (
                             block,
@@ -164,7 +141,7 @@ def engine(
                         )
 
                         loss = MSE + beta * KL
-                        if step % 200 != 0:
+                        if not (step > 0 and step % 200 == 0):
                             loss.backward()
                             optim.step()
 
@@ -181,6 +158,7 @@ def engine(
                             ],
                             dim=-1
                         ).any()
+
                         if has_nan_or_inf:
                             torch.save(
                                 model,
@@ -231,7 +209,7 @@ def engine(
                             step
                         )
                         step += 1
-                        # print(loss.item(), MSE.item(), KL.item())
+
                     torch.save(
                         model,
                         path.join(save_loc, f'model_{epoch}.ckpt')
