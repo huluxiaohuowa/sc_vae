@@ -140,6 +140,11 @@ def engine(
                             seg_ids
                         )
 
+                        torch.nn.utils.clip_grad_norm_(
+                            model.parameters(),
+                            grad_clip
+                        )
+
                         loss = MSE + beta * KL
                         if not (step > 0 and step % 200 == 0):
                             loss.backward()
@@ -188,26 +193,39 @@ def engine(
 
                             break
 
-                        torch.nn.utils.clip_grad_norm_(
-                            model.parameters(),
-                            grad_clip
-                        )
+                        if not (step > 0 and step % 200 == 0):
+                            writer.add_scalar(
+                                f'loss',
+                                loss.cpu().item(),
+                                step
+                            )
+                            writer.add_scalar(
+                                f'recon_loss',
+                                MSE.cpu().item(),
+                                step
+                            )
+                            writer.add_scalar(
+                                f'KL',
+                                KL.cpu().item(),
+                                step
+                            )
+                        else:
+                            writer.add_scalar(
+                                f'test_loss',
+                                loss.cpu().item(),
+                                step
+                            )
+                            writer.add_scalar(
+                                f'test_recon_loss',
+                                MSE.cpu().item(),
+                                step
+                            )
+                            writer.add_scalar(
+                                f'test_KL',
+                                KL.cpu().item(),
+                                step
+                            )
 
-                        writer.add_scalar(
-                            f'loss',
-                            loss.cpu().item(),
-                            step
-                        )
-                        writer.add_scalar(
-                            f'recon_loss',
-                            MSE.cpu().item(),
-                            step
-                        )
-                        writer.add_scalar(
-                            f'KL',
-                            KL.cpu().item(),
-                            step
-                        )
                         step += 1
 
                     torch.save(
