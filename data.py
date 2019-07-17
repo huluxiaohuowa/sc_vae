@@ -62,7 +62,7 @@ class ComLoader(Loader):
     def __init__(self, **kargs):
         super(ComLoader, self).__init__(**kargs)
 
-    def __len__():
+    def __len__(self):
         return self.num_id_block
 
     def __iter__(self):

@@ -78,15 +78,15 @@ def engine(
                 num_workers=num_p,
                 batch_size=batch_size
             )
-            iter_train = iter(train_loader)
             test_loader = ComLoader(
-                original_scaffolds_file='data-center/train.smi',
+                original_scaffolds_file='data-center/test.smi',
                 num_workers=num_p,
                 batch_size=batch_size
             )
-            iter_test = iter(test_loader)
 
             for epoch in ipb(range(num_epochs), desc='epochs'):
+                iter_train = iter(train_loader)
+                iter_test = iter(test_loader)
                 try:
                     if has_nan_or_inf:
                         break
