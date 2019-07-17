@@ -140,14 +140,13 @@ def engine(
                             seg_ids
                         )
 
-                        torch.nn.utils.clip_grad_norm_(
-                            model.parameters(),
-                            grad_clip
-                        )
-
                         loss = MSE + beta * KL
                         if not (step > 0 and step % 200 == 0):
                             loss.backward()
+                            torch.nn.utils.clip_grad_norm_(
+                                model.parameters(),
+                                grad_clip
+                            )
                             optim.step()
 
                         # debug for Nan in recon loss
