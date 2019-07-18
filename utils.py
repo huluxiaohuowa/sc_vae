@@ -27,6 +27,8 @@ __all__ = [
     'str_block_gen',
     'get_mol_from_array',
     'get_mols_from_array',
+    'spmmsp',
+
     # 'np_onehot_to_label'
 ]
 
