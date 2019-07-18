@@ -8,10 +8,10 @@ from ipypb import ipb
 import multiprocess as mp
 from joblib import Parallel, delayed
 
-from networks import *
 from data import *
 from utils import *
 from mol_spec import *
+from scaffold_inference_network_architecture import *
 
 # config_id = 'naive3'
 # device_id = 2

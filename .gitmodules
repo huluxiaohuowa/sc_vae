@@ -9,3 +9,6 @@
 [submodule "distrib_zoo.git"]
 	path = distrib_zoo
 	url = ssh://git@ddl.bjmu.edu.cn:15806/jach4/distrib_zoo.git
+[submodule "scaffold_inference_network_architecture.git"]
+	path = scaffold_inference_network_architecture
+	url = ssh://git@ddl.bjmu.edu.cn:15806/scaffold-network/scaffold_inference_network_architecture.git

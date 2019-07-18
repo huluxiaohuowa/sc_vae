@@ -13,9 +13,7 @@ import adabound
 
 from data import *
 from utils import *
-from ops import *
-from networks import *
-
+from scaffold_inference_network_architecture import *
 # device_id = 1
 # device = torch.device(f'cuda:{device_id}')
 # batch_size = 128
