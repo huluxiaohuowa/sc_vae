@@ -9,6 +9,7 @@ import torch
 # from joblib import Parallel, delayed
 
 from data_utils import *
+from mol_spec import MoleculeSpec
 from scaffold_inference_network_architecture import *
 
 ms = MoleculeSpec.get_default()

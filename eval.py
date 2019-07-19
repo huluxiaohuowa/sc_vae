@@ -9,6 +9,7 @@ import multiprocess as mp
 from joblib import Parallel, delayed
 
 from data_utils import *
+from mol_spec import MoleculeSpec
 from scaffold_inference_network_architecture import *
 
 # config_id = 'naive3'
