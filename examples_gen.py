@@ -8,9 +8,7 @@ import torch
 # import multiprocess as mp
 # from joblib import Parallel, delayed
 
-from data import *
-from utils import *
-from mol_spec import *
+from data_utils import *
 from scaffold_inference_network_architecture import *
 
 ms = MoleculeSpec.get_default()

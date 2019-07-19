@@ -1,7 +1,4 @@
-[submodule "mol_spec"]
-	path = mol_spec
-	url = ssh://git@ddl.bjmu.edu.cn:15806/ybli/mol_spec.git
-    # ignore = all
+
 [submodule "data-center.git"]
 	path = data-center
 	url = ssh://git@ddl.bjmu.edu.cn:15806/scaffold-network/data-center.git
@@ -12,3 +9,6 @@
 [submodule "scaffold_inference_network_architecture.git"]
 	path = scaffold_inference_network_architecture
 	url = ssh://git@ddl.bjmu.edu.cn:15806/scaffold-network/scaffold_inference_network_architecture.git
+[submodule "data_utils.git"]
+	path = data_utils
+	url = ssh://git@ddl.bjmu.edu.cn:15806/scaffold-network/data_utils.git

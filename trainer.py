@@ -11,8 +11,7 @@ import torch
 from torch.utils.tensorboard import SummaryWriter
 import adabound
 
-from data import *
-from utils import *
+from data_utils import *
 from scaffold_inference_network_architecture import *
 # device_id = 1
 # device = torch.device(f'cuda:{device_id}')
